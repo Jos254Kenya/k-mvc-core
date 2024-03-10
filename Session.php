@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Merudairy\Fmmerudairy\core;
+namespace sigawa\mvc-core\core;
 
 
 class Session

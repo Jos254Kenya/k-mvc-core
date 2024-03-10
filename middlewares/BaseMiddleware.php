@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Merudairy\Fmmerudairy\core\middlewares;
+namespace sigawa\mvc-core\core\middlewares;
 
 
 abstract class BaseMiddleware

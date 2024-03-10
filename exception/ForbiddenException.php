@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Merudairy\Fmmerudairy\core\exception;
+namespace sigawa\mvc-core\core\exception;
 
 
 class ForbiddenException extends \Exception

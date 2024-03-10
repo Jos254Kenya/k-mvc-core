@@ -1,9 +1,9 @@
 <?php
 
-namespace Merudairy\Fmmerudairy\core;
+namespace sigawa\mvc-core\core;
 
 use Exception;
-use Merudairy\Fmmerudairy\core\exception\NotFoundException;
+use sigawa\mvc-core\core\exception\NotFoundException;
 
 class View
 {

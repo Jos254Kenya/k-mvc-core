@@ -1,5 +1,5 @@
 {
-    "name": "sigawa/mvc-core",
+    "name": "sigawa/mvccore",
     "description": "Customized MVC mini-framework for Dev. purposes and offers room for improvements",
     "type": "library",
     "require": {

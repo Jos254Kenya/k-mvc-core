@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Merudairy\Fmmerudairy\core\form;
+namespace sigawa\mvc-core\core\form;
 
 
 class checkBoxInput

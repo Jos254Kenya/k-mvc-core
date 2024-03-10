@@ -1,8 +1,8 @@
 <?php
 
-namespace Merudairy\Fmmerudairy\core\form;
+namespace sigawa\mvc-core\core\form;
 
-use Merudairy\Fmmerudairy\core\Model;
+use sigawa\mvc-core\core\Model;
 ;
 
 class Select extends BaseSelect

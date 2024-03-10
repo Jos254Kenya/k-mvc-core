@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvccore\core\db;
+namespace sigawa\mvccore\db;
 
 use PDOException;
 

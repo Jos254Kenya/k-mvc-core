@@ -1,9 +1,9 @@
 <?php
 
-namespace sigawa\mvccore\core;
+namespace sigawa\mvccore;
 
 use Exception;
-use sigawa\mvccore\core\exception\NotFoundException;
+use sigawa\mvccore\exception\NotFoundException;
 
 class View
 {

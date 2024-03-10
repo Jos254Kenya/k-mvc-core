@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvccore\core\middlewares;
+namespace sigawa\mvccore\middlewares;
 
 
 abstract class BaseMiddleware

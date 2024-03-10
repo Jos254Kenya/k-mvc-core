@@ -1,11 +1,11 @@
 <?php
 
 
-namespace sigawa\mvccore\core\middlewares;
+namespace sigawa\mvccore\middlewares;
 
 
-use VMSMeruDairy\core\Application;
-use VMSMeruDairy\core\exception\ForbiddenException;
+use sigawa\mvccore\Application;
+use sigawa\mvccore\exception\ForbiddenException;
 
 class AuthMiddleware extends BaseMiddleware
 {

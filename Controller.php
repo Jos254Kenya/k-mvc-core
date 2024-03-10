@@ -1,7 +1,7 @@
 <?php
 
-namespace Merudairy\Fmmerudairy\core;
-use Merudairy\Fmmerudairy\core\middlewares\BaseMiddleware;
+namespace sigawa\mvccore\core;
+use sigawa\mvccore\core\middlewares\BaseMiddleware;
 class Controller
 {
     public string $layout = 'main';

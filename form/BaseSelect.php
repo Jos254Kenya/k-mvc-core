@@ -1,8 +1,8 @@
 <?php
 
-namespace Merudairy\Fmmerudairy\core\form;
+namespace sigawa\mvccore\core\form;
 
-use Merudairy\Fmmerudairy\core\Model;
+use sigawa\mvccore\core\Model;
 
 abstract class BaseSelect
 {

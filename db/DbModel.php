@@ -1,12 +1,12 @@
 <?php
 
 
-namespace Merudairy\Fmmerudairy\core\db;
+namespace sigawa\mvccore\core\db;
 
 
-use Merudairy\Fmmerudairy\core\Application;
+use sigawa\mvccore\core\Application;
 
-use Merudairy\Fmmerudairy\core\Model;
+use sigawa\mvccore\core\Model;
 
 abstract class DbModel extends Model
 {

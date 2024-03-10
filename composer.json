@@ -10,7 +10,7 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Sigawa\\MvcCore\\": "core/"
+            "sigawa\\mvccore\\": "."
         }
     },
     "authors": [

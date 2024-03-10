@@ -1,6 +1,6 @@
 <?php
 
-namespace Merudairy\Fmmerudairy\core\exception;
+namespace sigawa\mvccore\core\exception;
 
 class NotFoundException extends \Exception
 {

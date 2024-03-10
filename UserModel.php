@@ -1,10 +1,10 @@
 <?php
 
 
-namespace Merudairy\Fmmerudairy\core;
+namespace sigawa\mvccore\core;
 
 
-use Merudairy\Fmmerudairy\core\db\DbModel;
+use sigawa\mvccore\core\db\DbModel;
 
 abstract class UserModel extends DbModel
 {

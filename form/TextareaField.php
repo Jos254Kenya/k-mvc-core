@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvccore\core\form;
+namespace sigawa\mvccore\form;
 
 
 class TextareaField extends BaseField

@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvc-core\core\middlewares;
+namespace Merudairy\Fmmerudairy\core\middlewares;
 
 
 use VMSMeruDairy\core\Application;

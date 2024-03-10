@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvc-core\core\db;
+namespace Merudairy\Fmmerudairy\core\db;
 
 use PDOException;
 

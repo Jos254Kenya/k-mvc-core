@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvc-core\core;
+namespace Merudairy\Fmmerudairy\core;
 
 
 class Response

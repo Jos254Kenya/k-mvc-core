@@ -1,10 +1,10 @@
 <?php
 
 
-namespace sigawa\mvc-core\core\db;
+namespace Merudairy\Fmmerudairy\core\db;
 
 
-use sigawa\mvc-core\core\Application;
+use Merudairy\Fmmerudairy\core\Application;
 
 class Database
 {

@@ -1,8 +1,8 @@
 <?php
 
-namespace sigawa\mvc-core\core;
+namespace Merudairy\Fmmerudairy\core;
 
-use sigawa\mvc-core\core\db\Database;
+use Merudairy\Fmmerudairy\core\db\Database;
 
 class Application
 {

@@ -1,12 +1,12 @@
 <?php
 
 
-namespace sigawa\mvccore\core\db;
+namespace sigawa\mvccore\db;
 
 
-use sigawa\mvccore\core\Application;
+use sigawa\mvccore\Application;
 
-use sigawa\mvccore\core\Model;
+use sigawa\mvccore\Model;
 
 abstract class DbModel extends Model
 {

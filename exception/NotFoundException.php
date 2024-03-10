@@ -1,6 +1,6 @@
 <?php
 
-namespace sigawa\mvccore\core\exception;
+namespace sigawa\mvccore\exception;
 
 class NotFoundException extends \Exception
 {

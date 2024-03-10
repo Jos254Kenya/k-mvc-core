@@ -1,7 +1,7 @@
 <?php
 
-namespace sigawa\mvccore\core;
-use sigawa\mvccore\core\middlewares\BaseMiddleware;
+namespace sigawa\mvccore;
+use sigawa\mvccore\middlewares\BaseMiddleware;
 class Controller
 {
     public string $layout = 'main';

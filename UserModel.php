@@ -4,7 +4,7 @@
 namespace sigawa\mvccore;
 
 
-use sigawa\mvccore\core\db\DbModel;
+use sigawa\mvccore\db\DbModel;
 
 abstract class UserModel extends DbModel
 {

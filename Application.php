@@ -1,8 +1,8 @@
 <?php
 
-namespace sigawa\mvccore\core;
+namespace sigawa\mvccore;
 
-use sigawa\mvccore\core\db\Database;
+use sigawa\mvccore\db\Database;
 
 class Application
 {

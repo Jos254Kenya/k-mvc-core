@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvccore\core\exception;
+namespace sigawa\mvccore\exception;
 
 
 class ForbiddenException extends \Exception

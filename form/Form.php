@@ -1,10 +1,10 @@
 <?php
 
 
-namespace sigawa\mvccore\core\form;
+namespace sigawa\mvccore\form;
 
 
-use sigawa\mvccore\core\Model;
+use sigawa\mvccore\Model;
 
 class Form
 {

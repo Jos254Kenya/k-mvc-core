@@ -1,7 +1,7 @@
 <?php
 
 
-namespace sigawa\mvccore\core;
+namespace sigawa\mvccore;
 
 
 class Request

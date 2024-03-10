@@ -2,7 +2,7 @@
 
 namespace sigawa\mvccore;
 
-use sigawa\mvccore\core\exception\NotFoundException;
+use sigawa\mvccore\exception\NotFoundException;
 
 class Router
 {

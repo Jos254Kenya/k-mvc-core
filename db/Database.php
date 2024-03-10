@@ -1,10 +1,10 @@
 <?php
 
 
-namespace sigawa\mvccore\core\db;
+namespace sigawa\mvccore\db;
 
 
-use sigawa\mvccore\core\Application;
+use sigawa\mvccore\Application;
 
 class Database
 {

@@ -1,6 +1,6 @@
 <?php
 
-namespace sigawa\mvccore\core;
+namespace sigawa\mvccore;
 
 use sigawa\mvccore\core\exception\NotFoundException;
 

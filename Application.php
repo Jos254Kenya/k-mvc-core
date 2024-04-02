@@ -24,7 +24,7 @@ class Application
     public View $view;
     public ?UserModel $user;
 
-    public function __construct($rootDir, $config)
+    public function __construct($rootDir, $config, $userNamespace)
     {
         $this->user = null;
         $this->userClass = $config['userClass'];
@@ -36,9 +36,17 @@ class Application
         $this->db = new Database($config['db']);
         $this->session = new Session();
         $this->view = new View();
+        $this->userClass = $userNamespace . '\\User';
 
         $userId = Application::$app->session->get('user');
+        $nw = $this->userClass;
+        if (!empty($userId) && !$nw::findOne(['id' => $userId])) {
+            // Remove the session data associated with the non-existent user
+            Application::$app->session->set('user', null);
+        }
+
         if ($userId) {
+            $userClass = $this->userClass;
             $key = $this->userClass::primaryKey();
             $this->user = $this->userClass::findOne([$key => $userId]);
         }
@@ -59,12 +67,26 @@ class Application
         return true;
     }
 
+    public function loginCustomer(UserModel $user)
+    {
+        $this->user = $user;
+        $className = get_class($user);
+        $primaryKey = $className::primaryKey();
+        $value = $user->{$primaryKey};
+        Application::$app->session->set('customerid', $value);
+        return true;
+    }
     public function logout()
     {
         $this->user = null;
         self::$app->session->remove('user');
     }
 
+    public function logoutCustomer()
+    {
+        $this->user = null;
+        self::$app->session->remove('customerid');
+    }
     public function run()
     {
         $this->triggerEvent(self::EVENT_BEFORE_REQUEST);
@@ -76,7 +98,6 @@ class Application
             ]);
         }
     }
-
     public function triggerEvent($eventName)
     {
         $callbacks = $this->eventListeners[$eventName] ?? [];

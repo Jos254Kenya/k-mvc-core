@@ -24,7 +24,7 @@ class Application
     public View $view;
     public ?UserModel $user;
 
-    public function __construct($rootDir, $config, $userNamespace)
+    public function __construct($rootDir, $config)
     {
         $this->user = null;
         $this->userClass = $config['userClass'];
@@ -36,19 +36,18 @@ class Application
         $this->db = new Database($config['db']);
         $this->session = new Session();
         $this->view = new View();
-        $this->userClass = $userNamespace . '\\User';
 
         $userId = Application::$app->session->get('user');
-        $nw = $this->userClass;
-        if (!empty($userId) && !$nw::findOne(['id' => $userId])) {
-            // Remove the session data associated with the non-existent user
-            Application::$app->session->set('user', null);
-        }
-
         if ($userId) {
-            $userClass = $this->userClass;
             $key = $this->userClass::primaryKey();
             $this->user = $this->userClass::findOne([$key => $userId]);
+            if (!$this->user) {
+                // Clear user session
+                Application::$app->session->remove('user');
+                // Redirect to staff login page
+                $this->response->redirect("stafflogin"); // Adjust the URL as needed
+                exit; // Ensure script execution stops after redirect
+            }
         }
     }
 

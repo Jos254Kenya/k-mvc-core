@@ -24,7 +24,7 @@ class CRUD
 
     public function saveGeneric(string $tableName, array $attributes, array $data): bool
     {
-        // Prepare the SQL statement
+        // Prepare the SQL statement`
         $params = array_map(fn($attr) => ":$attr", $attributes);
         $sql = "INSERT INTO $tableName (" . implode(",", $attributes) . ") 
             VALUES (" . implode(",", $params) . ")";
@@ -173,6 +173,56 @@ class CRUD
         return $statement->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    public function readAdvancedJoins(string $table, string $tableAlias, array $fields, array $conditions = [], array $joins = [], ?string $orderBy = null, int $limit = null): array
+{
+    // Construct the SELECT query dynamically
+    $query = 'SELECT ' . implode(', ', $fields) . ' FROM ' . $table . ' ' . $tableAlias;
+
+    // Handle JOIN clauses
+    foreach ($joins as $join) {
+        $query .= ' ' . $join;
+    }
+
+    // Construct the WHERE clause if conditions are provided
+    $whereClause = '';
+    if (!empty($conditions)) {
+        $whereClause = ' WHERE ' . implode(' AND ', array_map(function ($key) use ($tableAlias) {
+                return "$tableAlias.$key = :$key";
+            }, array_keys($conditions)));
+    }
+    $query .= $whereClause;
+
+    // Add the ORDER BY clause if provided
+    if ($orderBy !== null) {
+        $query .= ' ORDER BY ' . $orderBy;
+    }
+
+    // Add the LIMIT clause if provided
+    if ($limit !== null) {
+        $query .= ' LIMIT ' . (int)$limit;
+    }
+
+    // Prepare the query
+    $statement = self::prepare($query);
+
+    // Bind parameters if conditions are provided
+    if (!empty($conditions)) {
+        foreach ($conditions as $key => $value) {
+            $statement->bindValue(":$key", $value);
+        }
+    }
+
+    // Execute the query
+    $statement->execute();
+
+    // Fetch and return the result in associative array
+    $result['data'] = $statement->fetchAll(\PDO::FETCH_ASSOC);
+
+    // Count the number of rows returned
+    $result['count'] = count($result['data']);
+
+    return $result;
+}
 
     /**
      * Updates data in the specified table based on the provided data and conditions.

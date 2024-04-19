@@ -1,5 +1,5 @@
 ## CRUD class (extends Database class)
-# saveGeneric function
+### saveGeneric function
 The saveGeneric method is responsible for inserting data into a specified table in the database.
 It accepts three parameters:
 * $tableName: The name of the table where data will be inserted.

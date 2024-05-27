@@ -10,7 +10,6 @@ class Application
     const EVENT_AFTER_REQUEST = 'afterRequest';
 
     protected array $eventListeners = [];
-
     public static Application $app;
     public static string $ROOT_DIR;
     public string $userClass;

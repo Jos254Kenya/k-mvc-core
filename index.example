@@ -1,0 +1,35 @@
+<?php
+// Add this at the beginning of your index.php file
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
+
+use Dotenv\Dotenv;
+
+use yournamespace\models\User;
+use sigawa\mvccore\Application;
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+$dotenv = Dotenv::createImmutable(dirname(__DIR__));
+$dotenv->load();
+
+$config = [
+    'userClass' => User::class,
+    'db' => [
+        'dsn' => $_ENV['DB_DSN'],
+        'user' => $_ENV['DB_USER'],
+        'password' => $_ENV['DB_PASSWORD'],
+    ]
+];
+
+try {
+    $app = new Application(dirname(__DIR__),$config);
+    
+// define your routes here
+
+   
+    $app->run();
+} catch (PDOException $e) {
+    echo "Database connection error: Please try again later or contact support for help";
+}

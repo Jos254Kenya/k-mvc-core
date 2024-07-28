@@ -1,0 +1,60 @@
+<?php
+// do not change your namespace
+
+//Your namespace here
+
+
+//replace from here
+
+use sigawa\mvccore\UserModel;
+
+class User extends UserModel
+{
+
+    public int $id = 0;
+    public string $firstname = '';
+    public string $lastname = '';
+    public string $email = '';
+    public string $phonenumber = '';
+    public string $role_id = '';
+    public string $password = '';
+
+    public function setUserSession($userID){
+        $_SESSION['selected_userid'] =$userID;
+        return $userID;
+    }
+    public static function tableName(): string
+    {
+        return 'staff';
+    }
+
+    public function attributes(): array
+    {
+        return ['firstname', 'lastname','phonenumber', 'email','role_id', 'password'];
+    }
+
+    public function rules()
+    {
+        return [
+            'firstname' => [self::RULE_REQUIRED],
+            'lastname' => [self::RULE_REQUIRED],
+            'phonenumber' => [self::RULE_REQUIRED],
+            'role_id' => [self::RULE_REQUIRED,self::RULE_DIGIT],
+            'email' => [self::RULE_REQUIRED, self::RULE_EMAIL, [
+                self::RULE_UNIQUE, 'class' => self::class
+            ]],
+            'password' => [self::RULE_REQUIRED, [self::RULE_MIN, 'min' => 8],[self::RULE_UPPERCASE],[self::RULE_LOWERCASE],[self::RULE_SPECIAL_CHAR],[self::RULE_DIGIT]],
+        ];
+    }
+    public function save()
+    {
+        $this->password = password_hash($this->password, PASSWORD_DEFAULT);
+        return parent::save();
+    }
+
+       public function getDisplayName(): string
+    {
+        return $this->firstname . " ". $this->lastname;
+    }
+   }
+

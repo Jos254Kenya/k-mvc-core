@@ -1,1 +1,6 @@
-/vendor/
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea

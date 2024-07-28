@@ -47,9 +47,12 @@ Clone the repository or install via Composer:
 
 ```bash
 composer require sigawa/mvc-core:^1.0.1
+//OR
+git clone https://github.com/Jos254Kenya/k-mvc-core.git
 ```
-copy mcconsole fie to your project root folder so you may access it in your terminal
-you may run 
+Copy the mcconsole file to your project root folder to access it in your terminal.
+
+You can initialize a new project using:
 
 ```bash
 php mcconsole create:project
@@ -59,7 +62,7 @@ php mcconsole create:project
 
 ### 2. Configuration
 
-After installation, you need to configure your application. Copy the example environment file and update it with your configuration:
+After installation, configure your application by copying the example environment file and updating it with your configuration:
 
 ```bash
 cp .env.example .env
@@ -67,20 +70,19 @@ cp .env.example .env
 copy the mcconsole file to your project root directory, if u wish to use it for CLI
 
 ### 2.1. User class
-First you need to run the following command
+Run the following command to create a user model:
 
 ```bash
 php mcconsole make:model User
 ```
-then you will need to add the replace the function/class body with the one in the 'User.example' file
-the file provides a basic structure of a typical model class. You may modify it as per your need BUT remember
-to always have the following  line in your class
+Replace the function/class body with the one in the User.example file. Ensure your class includes:
+
 ```bash
 use sigawa\mvccore\UserModel;
 ```
 
 ### 2.2. index.php
-Copy the index.example file contents to /app/public/index.php
+Copy the contents of index.example to `/app/public/index.php`.
 
 ```bash
 php mcconsole make:model User
@@ -93,11 +95,12 @@ use sigawa\mvccore\UserModel;
 ```
 ### 3. Running the Application
 
-Use the built-in PHP server or mcconsole serve command to run your application:
+Use the built-in PHP server or the mcconsole serve command to run your application:
 
 ```bash
 php -S localhost:8000 -t public
 ```
+OR
 ```bash
 php mcconsole serve
 ```
@@ -119,11 +122,12 @@ $router->post('/submit', [HomeController::class,'functioname']);
 
 ### Controllers
 
-Create controllers in the `app/Controllers` directory: by running the following command
+Create controllers in the `app/Controllers` directory using:
 ```bash
 php mcconsole make:controller Controllername
 ```
-the resulting controller would look like
+Example controller:
+
 ```php
 namespace App\Controllers;
 
@@ -145,10 +149,11 @@ class ControllernameController extends Controller
 
 ### Models
 
-Create controllers in the `app/models` directory: by running the following command
+Create models in the `app/Models` directory using:
 ```bash
 php mcconsole make:model Modelname
 ```
+Example model:
 
 ```php
 namespace App\Models;
@@ -185,8 +190,7 @@ class permission extends DbModel
 ```
 ### CRUD
 
-You can access all the CRUD functions in the `CRUD` class
-Feel free to to modify it best fit your needs.
+Access all `CRUD` functions in the CRUD class.
 Example:
 
 ```php
@@ -272,11 +276,11 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Acknowledgments
 
-- Inspired by Laravel
+- Inspired by Laravel, symfony and codeignitor routing mechanism
 - Special thanks to all contributors
 
 ---
 
 Happy coding!
 
-Sigawa
+## SIGAWA

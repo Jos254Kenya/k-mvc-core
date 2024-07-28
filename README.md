@@ -14,7 +14,7 @@ Welcome to my custom MVC framework! This framework is inspired by in-depth knowl
 You can install this framework via Composer:
 
 ```bash
-composer require sigawa/mvc-core:^1.0.0.5
+composer require sigawa/mvc-core:^1.0.1
 ```
 
 ## Features
@@ -46,7 +46,7 @@ first, then
 Clone the repository or install via Composer:
 
 ```bash
-composer require sigawa/mvc-core:^1.0.0.5
+composer require sigawa/mvc-core:^1.0.1
 ```
 copy mcconsole fie to your project root folder so you may access it in your terminal
 you may run 

@@ -282,5 +282,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 Happy coding!
-
+#No hard feelings. I created this mini project during my start of career as a software developer (solely) and later proved to be very import for me and my team.
+- This repo is open to anyone willing to contribute positively. 
 ## SIGAWA

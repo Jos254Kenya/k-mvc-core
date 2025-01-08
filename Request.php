@@ -13,6 +13,18 @@ class Request
         return strtolower($_SERVER['REQUEST_METHOD']);
     }
 
+    public function getJsonBody(): ?array
+    {
+        $input = file_get_contents('php://input');
+        $data = json_decode($input, true);
+
+        if (json_last_error() === JSON_ERROR_NONE) {
+            return $data;
+        }
+
+        return null; // Return null if the JSON is invalid
+    }
+
     public function getUrl()
     {
         $path = $_SERVER['REQUEST_URI'];

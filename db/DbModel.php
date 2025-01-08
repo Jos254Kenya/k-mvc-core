@@ -17,17 +17,43 @@ abstract class DbModel extends Model
         return 'id';
     }
 
+
     public function save()
     {
-        $tableName = $this->tableName();
+        $tableName = static::tableName();
         $attributes = $this->attributes();
-        $params = array_map(fn($attr) => ":$attr", $attributes);
-        $statement = self::prepare("INSERT INTO $tableName (" . implode(",", $attributes) . ") 
-                VALUES (" . implode(",", $params) . ")");
-        foreach ($attributes as $attribute) {
-            $statement->bindValue(":$attribute", $this->{$attribute});
+        $primaryKey = static::primaryKey();
+
+        // Check if the record exists (for update or insert decision)
+        if (!empty($this->{$primaryKey})) {
+            // Update the existing record
+            $params = array_map(fn($attr) => "$attr = :$attr", $attributes);
+            $sql = "UPDATE $tableName SET " . implode(", ", $params) . " WHERE $primaryKey = :$primaryKey";
+            $statement = self::prepare($sql);
+
+            foreach ($attributes as $attribute) {
+                $statement->bindValue(":$attribute", $this->{$attribute});
+            }
+            $statement->bindValue(":$primaryKey", $this->{$primaryKey});
+        } else {
+            // Insert a new record
+            $params = array_map(fn($attr) => ":$attr", $attributes);
+            $sql = "INSERT INTO $tableName (" . implode(", ", $attributes) . ") 
+                VALUES (" . implode(", ", $params) . ")";
+            $statement = self::prepare($sql);
+
+            foreach ($attributes as $attribute) {
+                $statement->bindValue(":$attribute", $this->{$attribute});
+            }
         }
+
+        // Execute the query
         $statement->execute();
+
+        // If it's an insert, fetch and assign the last inserted ID
+        if (empty($this->{$primaryKey})) {
+            $this->{$primaryKey} = Application::$app->db->lastInsertId();
+        }
 
         return true;
     }
@@ -36,6 +62,22 @@ abstract class DbModel extends Model
     {
         return Application::$app->db->prepare($sql);
     }
+    public function delete(): bool
+    {
+        $tableName = static::tableName();
+        $primaryKey = static::primaryKey();
+
+        if (!empty($this->{$primaryKey})) {
+            $sql = "DELETE FROM $tableName WHERE $primaryKey = :$primaryKey";
+            $statement = self::prepare($sql);
+            $statement->bindValue(":$primaryKey", $this->{$primaryKey});
+
+            return $statement->execute();
+        }
+
+        return false;
+    }
+
 
     public function createId()
     {
@@ -45,15 +87,38 @@ abstract class DbModel extends Model
     {
         $tableName = static::tableName();
         $attributes = array_keys($where);
-        $sql = implode("AND", array_map(fn($attr) => "$attr = :$attr", $attributes));
-        $statement = self::prepare("SELECT * FROM $tableName WHERE $sql");
-        foreach ($where as $key => $item) {
-            $statement->bindValue(":$key", $item);
+        $conditions = implode(" AND ", array_map(fn($attr) => "$attr = :$attr", $attributes));
+        $sql = "SELECT * FROM $tableName WHERE $conditions LIMIT 1";
+        $statement = self::prepare($sql);
+
+        foreach ($where as $key => $value) {
+            $statement->bindValue(":$key", $value);
         }
+
         $statement->execute();
         $result = $statement->fetchObject(static::class);
+
         return $result !== false ? $result : null;
     }
 
+    public static function findAll(array $where = [])
+    {
+        $tableName = static::tableName();
+        $sql = "SELECT * FROM $tableName";
 
+        if (!empty($where)) {
+            $attributes = array_keys($where);
+            $conditions = implode(" AND ", array_map(fn($attr) => "$attr = :$attr", $attributes));
+            $sql .= " WHERE $conditions";
+        }
+
+        $statement = self::prepare($sql);
+
+        foreach ($where as $key => $value) {
+            $statement->bindValue(":$key", $value);
+        }
+
+        $statement->execute();
+        return $statement->fetchAll(\PDO::FETCH_CLASS, static::class);
+    }
 }

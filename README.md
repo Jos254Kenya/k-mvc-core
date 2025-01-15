@@ -277,3 +277,6 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 **Happy Coding!** 🎉
+- No hard feelings. I created this project as a beginner in MVC, feel free to critisize and do not forget to point out the burning issues you discovered.
+- I depend on your feedback, positive or discouraging, am ready to gusp all...so, start sending them right away.
+- Explore the architectutre ... create from or add to IT

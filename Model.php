@@ -31,7 +31,36 @@ class Model
             }
         }
     }
+    public static function findByQuery(string $query, array $params = []): array
+    {
+        $db = Application::$app->db->pdo;
+        $stmt = $db->prepare($query);
 
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(":$key", $value);
+        }
+
+        $stmt->execute();
+
+        $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        return $results; // Returns an empty array if no records are found
+    }
+    public static function findOneByQuery(string $query, array $params = []): ?array
+    {
+        $db = Application::$app->db->pdo;
+        $stmt = $db->prepare($query);
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(":$key", $value);
+        }
+
+        $stmt->execute();
+
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        return $result ?: null; // Return null if no record is found
+    }
     public function attributes(): array
     {
         return [];

@@ -78,6 +78,7 @@ class Application
     {
         $this->user = null;
         self::$app->session->remove('user');
+        
     }
 
     public function logoutCustomer()

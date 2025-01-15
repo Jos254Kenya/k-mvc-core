@@ -25,6 +25,10 @@ class Router
     {
         $this->routeMap['post'][$url] = $callback;
     }
+    public function delete(string $url, $callback)
+    {
+        $this->routeMap['delete'][$url] = $callback;
+    }
 
     /**
      * @param $method

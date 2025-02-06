@@ -1,0 +1,53 @@
+<?php
+
+namespace Sigawa\Trekafrica\controllers;
+
+use sigawa\mvccore\Request;
+use sigawa\mvccore\Controller;
+
+class UtilityController extends Controller
+{
+    public function serveFile(Request $request)
+    {
+        if (!isset($request->getBody()['file'])) {
+            http_response_code(400);
+            header('Content-Type: application/json');
+            echo json_encode(["error" => "Invalid request. No file specified."]);
+            exit;
+        }
+
+        $file = basename($request->getBody()['file']); // Prevent basic directory traversal
+        $baseDir =  __DIR__. $_ENV['UPLOADS_DIR'];
+        $requestedFile = realpath($baseDir . '/' . $file); // Get real file path
+        // Prevent directory traversal attack
+        if (!$requestedFile || strpos($requestedFile, realpath($baseDir)) !== 0 || !file_exists($requestedFile)) {
+            http_response_code(403);
+            header('Content-Type: application/json');
+            echo json_encode(["error" => "File not found or access denied. at".$requestedFile]);
+            exit;
+        }
+
+        // Determine MIME type
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $requestedFile);
+        finfo_close($finfo);
+
+        // Check if 'download' is set in the URL query parameters
+        $disposition = (isset($_GET['download']) && $_GET['download'] === 'true') ? 'attachment' : 'inline';
+
+        // Set headers
+        header('Content-Description: File Transfer');
+        header('Content-Type: ' . $mimeType);
+        header('Content-Disposition: ' . $disposition . '; filename="' . basename($requestedFile) . '"');
+        header('Expires: 0');
+        header('Cache-Control: must-revalidate');
+        header('Pragma: public');
+        header('Content-Length: ' . filesize($requestedFile));
+
+        // Read and output the file
+        readfile($requestedFile);
+        exit;
+    }
+}
+
+// During serveFile, the, if u wish to download the file directory, set the '&download=true' flag in the request

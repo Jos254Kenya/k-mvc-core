@@ -90,7 +90,7 @@ class Model
     /**
      * @return bool
      */
-    public function validate()
+    public function validate($exceptId = null)
     {
         foreach ($this->rules() as $attribute => $rules) {
             $value = $this->{$attribute};
@@ -99,20 +99,21 @@ class Model
                 if (!is_string($rule)) {
                     $ruleName = $rule[0];
                 }
-                if($ruleName=== self::RULE_CHECKBOX && $value <1){
+    
+                if ($ruleName === self::RULE_CHECKBOX && $value < 1) {
                     $this->addError($attribute, self::RULE_CHECKBOX);
                 }
-                if($ruleName===self::RULE_UPPERCASE && !preg_match('/[A-Z]/', $value)){
-                    $this->addErrorByRule($attribute,self::RULE_UPPERCASE);
+                if ($ruleName === self::RULE_UPPERCASE && !preg_match('/[A-Z]/', $value)) {
+                    $this->addErrorByRule($attribute, self::RULE_UPPERCASE);
                 }
-                if($ruleName===self::RULE_LOWERCASE && !preg_match('/[a-z]/', $value)){
-                    $this->addErrorByRule($attribute,self::RULE_LOWERCASE);
+                if ($ruleName === self::RULE_LOWERCASE && !preg_match('/[a-z]/', $value)) {
+                    $this->addErrorByRule($attribute, self::RULE_LOWERCASE);
                 }
-                if($ruleName===self::RULE_SPECIAL_CHAR && !preg_match('/[^a-zA-Z\d]/', $value)){
-                    $this->addErrorByRule($attribute,self::RULE_SPECIAL_CHAR);
+                if ($ruleName === self::RULE_SPECIAL_CHAR && !preg_match('/[^a-zA-Z\d]/', $value)) {
+                    $this->addErrorByRule($attribute, self::RULE_SPECIAL_CHAR);
                 }
-                if($ruleName===self::RULE_DIGIT && !preg_match('/\d/', $value)){
-                    $this->addErrorByRule($attribute,self::RULE_DIGIT);
+                if ($ruleName === self::RULE_DIGIT && !preg_match('/\d/', $value)) {
+                    $this->addErrorByRule($attribute, self::RULE_DIGIT);
                 }
                 if ($ruleName === self::RULE_REQUIRED && !$value) {
                     $this->addErrorByRule($attribute, self::RULE_REQUIRED);
@@ -129,16 +130,30 @@ class Model
                 if ($ruleName === self::RULE_MATCH && $value !== $this->{$rule['match']}) {
                     $this->addErrorByRule($attribute, self::RULE_MATCH, ['match' => $rule['match']]);
                 }
-
+    
+                // ✅ Unique Validation with Optional Except ID
                 if ($ruleName === self::RULE_UNIQUE) {
                     $className = $rule['class'];
                     $uniqueAttr = $rule['attribute'] ?? $attribute;
                     $tableName = $className::tableName();
                     $db = Application::$app->db;
-                    $statement = $db->prepare("SELECT * FROM $tableName WHERE $uniqueAttr = :$uniqueAttr");
+    
+                    $query = "SELECT * FROM $tableName WHERE $uniqueAttr = :$uniqueAttr";
+    
+                    if ($exceptId) { // Only exclude ID if provided
+                        $query .= " AND id != :exceptId";
+                    }
+    
+                    $statement = $db->prepare($query);
                     $statement->bindValue(":$uniqueAttr", $value);
+    
+                    if ($exceptId) {
+                        $statement->bindValue(":exceptId", $exceptId);
+                    }
+    
                     $statement->execute();
                     $record = $statement->fetchObject();
+    
                     if ($record) {
                         $this->addErrorByRule($attribute, self::RULE_UNIQUE);
                     }
@@ -147,7 +162,6 @@ class Model
         }
         return empty($this->errors);
     }
-
     /**
      * @return string[]
      */
@@ -156,15 +170,15 @@ class Model
         return [
 
             self::RULE_UNIQUE => 'Record with this {field} or username already exists',
-            self::RULE_REQUIRED => 'Please enter data in this field. This field is required',
-            self::RULE_EMAIL => 'This field must contain a valid email address e.g example@karsch.com',
-            self::RULE_MAX => 'The maximum length MUST not exceed {max} characters for this field',
-            self::RULE_MIN => 'The minimum length is {min} characters for this field',
-            self::RULE_MATCH =>'This field must be the same as {match} field',
-            self::RULE_DIGIT => 'This field must contain at least one Number',
-            self::RULE_LOWERCASE => 'This field MUST contain at least one Lowercase character',
-            self::RULE_SPECIAL_CHAR => 'This field MUST contain at least one special character',
-            self::RULE_UPPERCASE => 'This field MUST contain at least one Uppercase character',
+            self::RULE_REQUIRED => '{field} field is required',
+            self::RULE_EMAIL => '{field} field must contain a valid email address e.g example@karsch.com',
+            self::RULE_MAX => 'The maximum length for {field} MUST not exceed {max} characters for this field',
+            self::RULE_MIN => 'The minimum length for {field} is {min} characters for this field',
+            self::RULE_MATCH => '{field} field must be the same as {match} field',
+            self::RULE_DIGIT => '{field} must contain at least one Number',
+            self::RULE_LOWERCASE => '{field} MUST contain at least one Lowercase character',
+            self::RULE_SPECIAL_CHAR => '{field} field MUST contain at least one special character',
+            self::RULE_UPPERCASE => '{field} field MUST contain at least one Uppercase character',
         ];
     }
 
@@ -197,5 +211,41 @@ class Model
     {
         $errors = $this->errors[$attribute] ?? [];
         return $errors[0] ?? '';
+    }
+    // Existing properties and methods...
+
+    /**
+     * Get all errors as a flat array of messages.
+     *
+     * @return array
+     */
+    public function getErrorMessages(): array
+    {
+        $flatErrors = [];
+        foreach ($this->errors as $fieldErrors) {
+            $flatErrors = array_merge($flatErrors, $fieldErrors);
+        }
+        return $flatErrors;
+    }
+
+    /**
+     * Get all errors as a single concatenated string.
+     *
+     * @param string $separator
+     * @return string
+     */
+    public function getErrorString(string $separator = ', '): string
+    {
+        return implode($separator, $this->getErrorMessages());
+    }
+
+    /**
+     * Get errors as an associative array (default behavior).
+     *
+     * @return array
+     */
+    public function getErrors(): array
+    {
+        return $this->errors;
     }
 }

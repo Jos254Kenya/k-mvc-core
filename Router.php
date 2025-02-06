@@ -3,12 +3,19 @@
 namespace sigawa\mvccore;
 
 use sigawa\mvccore\exception\NotFoundException;
+use sigawa\mvccore\middlewares\BaseMiddleware;
 
 class Router
 {
     private Request $request;
     private Response $response;
-    private array $routeMap = [];
+    private array $routeMap = [
+        'get' => [],
+        'post' => [],
+        'delete' => [],
+        'put' => [],
+        'patch' => []
+    ];
 
     public function __construct(Request $request, Response $response)
     {
@@ -16,109 +23,129 @@ class Router
         $this->response = $response;
     }
 
-    public function get(string $url, $callback)
+    private function addRoute(string $method, string $url, $callback, array $middlewares = [])
     {
-        $this->routeMap['get'][$url] = $callback;
+        $this->routeMap[strtolower($method)][$url] = [
+            'callback' => $callback,
+            'middlewares' => $middlewares
+        ];
     }
 
-    public function post(string $url, $callback)
+    public function get(string $url, $callback, array $middlewares = [])
     {
-        $this->routeMap['post'][$url] = $callback;
-    }
-    public function delete(string $url, $callback)
-    {
-        $this->routeMap['delete'][$url] = $callback;
+        $this->addRoute('get', $url, $callback, $middlewares);
     }
 
-    /**
-     * @param $method
-     * @return array
-     */
-    public function getRouteMap($method): array
+    public function post(string $url, $callback, array $middlewares = [])
     {
-        return $this->routeMap[$method] ?? [];
+        $this->addRoute('post', $url, $callback, $middlewares);
     }
 
-    public function getCallback()
+    public function delete(string $url, $callback, array $middlewares = [])
     {
-        $method = $this->request->getMethod();
-        $url = $this->request->getUrl();
-        // Trim slashes
-        $url = trim($url, '/');
+        $this->addRoute('delete', $url, $callback, $middlewares);
+    }
 
-        // Get all routes for current request method
-        $routes = $this->getRouteMap($method);
+    public function put(string $url, $callback, array $middlewares = [])
+    {
+        $this->addRoute('put', $url, $callback, $middlewares);
+    }
 
-        $routeParams = false;
-        // Start iterating registered routes
-        foreach ($routes as $route => $callback) {
-            // Trim slashes
-            $route = trim($route, '/');
-            $routeNames = [];
+    public function patch(string $url, $callback, array $middlewares = [])
+    {
+        $this->addRoute('patch', $url, $callback, $middlewares);
+    }
 
-            if (!$route) {
-                continue;
-            }
+    private function getRouteMap(string $method): array
+    {
+        return $this->routeMap[strtolower($method)] ?? [];
+    }
 
-            // Find all route names from route and save in $routeNames
-            if (preg_match_all('/\{(\w+)(:[^}]+)?}/', $route, $matches)) {
-                $routeNames = $matches[1];
-            }
+    private function parseRoute(string $route): string
+    {
+        return "@^" . preg_replace_callback(
+            '/\{(\w+)(:([^}]+))?}/',
+            fn($matches) => isset($matches[3]) ? "({$matches[3]})" : '(\w+)',
+            trim($route, '/')
+        ) . "$@";
+    }
 
-            // Convert route name into regex pattern
-            $routeRegex = "@^" . preg_replace_callback('/\{\w+(:([^}]+))?}/', fn($m) => isset($m[2]) ? "({$m[2]})" : '(\w+)', $route) . "$@";
+    private function matchRoute(string $url, string $method, array $routes): ?array
+    {
+        foreach ($routes as $route => $details) {
+            $routeRegex = $this->parseRoute($route);
 
-            // Test and match current route against $routeRegex
-            if (preg_match_all($routeRegex, $url, $valueMatches)) {
-                $values = [];
-                for ($i = 1; $i < count($valueMatches); $i++) {
-                    $values[] = $valueMatches[$i][0];
+            if (preg_match($routeRegex, $url, $matches)) {
+                array_shift($matches); // Remove the full regex match
+
+                if (preg_match_all('/\{(\w+)/', $route, $paramNames)) {
+                    $routeParams = array_combine($paramNames[1], $matches);
+                    $this->request->setRouteParams($routeParams);
                 }
-                $routeParams = array_combine($routeNames, $values);
 
-                $this->request->setRouteParams($routeParams);
-                return $callback;
+                return $details;
             }
         }
 
-        return false;
+        return null;
     }
+
+    public function group(string $prefix, callable $callback, array $middlewares = [])
+    {
+        $originalRequestUrl = $this->request->getUrl(); // Store the original URL
+        $this->request->setUrl($prefix . '/' . ltrim($originalRequestUrl, '/'));
+    
+        // Pass the current router instance ($this) to the callback
+        call_user_func($callback, $this);
+    
+        // Restore the original URL after defining grouped routes
+        $this->request->setUrl($originalRequestUrl);
+    }
+   
 
     public function resolve()
     {
         $method = $this->request->getMethod();
-        $url = $this->request->getUrl();
-        $callback = $this->routeMap[$method][$url] ?? false;
-        if (!$callback) {
+        $url = trim($this->request->getUrl(), '/');
+        $routes = $this->getRouteMap($method);
 
-            $callback = $this->getCallback();
+        $matchedRoute = $this->matchRoute($url, $method, $routes);
 
-            if ($callback === false) {
-                throw new NotFoundException();
+        if (!$matchedRoute) {
+            throw new NotFoundException("Route not found: $method $url");
+        }
+
+        $callback = $matchedRoute['callback'];
+        $middlewares = $matchedRoute['middlewares'] ?? [];
+
+        // Execute route-specific middlewares
+        foreach ($middlewares as $middleware) {
+            if ($middleware instanceof BaseMiddleware) {
+                $middleware->execute($this->request, $this->response);
+            } else {
+                throw new \Exception("Invalid middleware provided.");
             }
         }
-        if (is_string($callback)) {
-            return Application::$app->view->renderView($callback);
-        }
+
+        // Handle controller callbacks
         if (is_array($callback)) {
-            /**
-             * @var $controller Controller
-             */
-            $controller = new $callback[0];
+            $controller = new $callback[0]();
             $controller->action = $callback[1];
             Application::$app->controller = $controller;
-            $middlewares = $controller->getMiddlewares();
-            foreach ($middlewares as $middleware) {
-                $middleware->execute();
+
+            // Execute controller-specific middlewares
+            foreach ($controller->getMiddlewares() as $middleware) {
+                if ($middleware instanceof BaseMiddleware) {
+                    $middleware->execute($this->request, $this->response);
+                } else {
+                    throw new \Exception("Invalid middleware provided.");
+                }
             }
+
             $callback[0] = $controller;
         }
-        return call_user_func($callback, $this->request, $this->response);
-    }
 
-
-    public function renderViewOnly($view, $params = [])
-    {
-        return Application::$app->view->renderViewOnly($view, $params);
+        // Execute the callback with route parameters
+        return call_user_func($callback, $this->request, $this->response, ...$this->request->getRouteParams());
     }
 }

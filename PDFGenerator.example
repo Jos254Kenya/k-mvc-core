@@ -1,0 +1,268 @@
+<?php
+
+namespace Sigawa\Trekafrica\models;
+
+use sigawa\mvccore\Model;
+use TCPDF;
+
+class PDFGenerator extends Model
+{
+    /**
+     * Generates a PDF for the given reports data.
+     *
+     * @param array $reports
+     * @param string $fileName
+     * @return void
+     */
+     
+    public static function clientProfile(array $reports, string $fileName = 'client_profile.pdf')
+    {
+        // Extract client details
+        $clientName = $reports['full_name'] ?? 'Unknown Client';
+        $gender = $reports['gender'] ?? 'Not Provided';
+        $email = $reports['email'] ?? 'Not Provided';
+        $phone = $reports['phone'] ?? 'Not Provided';
+        $passportNumber = $reports['passport_number'] ?? 'N/A';
+        $dob = $reports['date_of_birth'] ?? 'N/A';
+        $nationality = $reports['nationality'] ?? 'N/A';
+        $address = $reports['street_address'] ?? 'N/A';
+        $city = $reports['city'] ?? 'N/A';
+        $state = $reports['state'] ?? 'N/A';
+        $zip = $reports['zip_code'] ?? 'N/A';
+        $clientType = $reports['client_type'] ?? 'N/A';
+        $emergencyContact = $reports['emergency_contact_name'] ?? 'N/A';
+        $emergencyPhone = $reports['emergency_contact_phone'] ?? 'N/A';
+        $specialRequests = $reports['special_requests'] ?? 'None';
+        $notes = $reports['notes'] ?? 'None';
+
+        // File Download Link
+        $fileLink = !empty($reports['file_path'])
+            ? '<a href="' . $_ENV['base_site_url'] . '/servefile?file=' . $reports['file_path'] . '&download=true" 
+             style="color: #007BFF; text-decoration: none; font-weight: bold;">Download</a>'
+            : 'N/A';
+
+        // Create a new TCPDF instance
+        $pdf = new TCPDF('P', 'mm', 'A4');
+
+        // Set document information
+        $pdf->SetCreator('TREK AFRICA ADVENTURES');
+        $pdf->SetAuthor('KaribuWEBDev');
+        $pdf->SetTitle("$clientName Profile");
+        $pdf->SetSubject('Client Profile');
+        $pdf->SetKeywords('Client, Profile, PDF');
+        // Set margins
+        $pdf->SetMargins(10, 15, 10);
+        $pdf->SetHeaderMargin(10);
+        $pdf->SetFooterMargin(10);
+
+        // Add a page
+        $pdf->AddPage();
+        // Set font
+        $pdf->SetFont('helvetica', '', 10);
+        // Add Logo
+        $logoPath = $_SERVER['DOCUMENT_ROOT'] . "/assets/media/logos/logo.png"; // Absolute path to the logo
+        if (file_exists($logoPath)) {
+            $pdf->Image($logoPath, 90, 20, 50); // Centered and properly sized
+        }
+        $pdf->Ln(30); // Add spacing after logo
+
+        // HTML Content with Updated Row Height and Styling
+        $html = '
+                <style>
+                    h2 {
+                        color: #007BFF;
+                        text-align: center;
+                        font-size: 24px;
+                        font-weight: bold;
+                        margin-top: 10px;
+                    }
+                    h3 {
+                        color: #333;
+                        text-align: center;
+                        margin-bottom: 15px;
+                        font-size: 18px;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    td {
+                        border: 1px solid #ddd;
+                        padding: 15px; /* Increased padding for better row height */
+                        font-size: 12px;
+                        line-height: 1.8; /* Adjusted line height for more spacing */
+                    }
+                    td.label {
+                        font-weight: bold;
+                        background-color: #f2f2f2;
+                        color: #333;
+                        width: 25%;
+                    }
+                    td.value {
+                        width: 25%;
+                    }
+                    td.wide {
+                        width: 75%;
+                    }
+                    .footer {
+                        margin-top: 30px;
+                        padding: 12px;
+                        text-align: center;
+                        font-size: 14px;
+                        background-color: #007BFF;
+                        color: #ffffff;
+                        font-weight: bold;
+                    }
+                </style>
+
+                <h2>Client Profile</h2>
+                <h3>' . htmlspecialchars($clientName) . '</h3>
+
+                <table>
+                    <tr>
+                        <td class="label">Full Name:</td>
+                        <td class="value">' . htmlspecialchars($clientName) . '</td>
+                        <td class="label">Gender:</td>
+                        <td class="value">' . htmlspecialchars($gender) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Email:</td>
+                        <td class="value">' . htmlspecialchars($email) . '</td>
+                        <td class="label">Phone:</td>
+                        <td class="value">' . htmlspecialchars($phone) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Date of Birth:</td>
+                        <td class="value">' . htmlspecialchars($dob) . '</td>
+                        <td class="label">Nationality:</td>
+                        <td class="value">' . htmlspecialchars($nationality) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Passport Number:</td>
+                        <td class="value">' . htmlspecialchars($passportNumber) . '</td>
+                        <td class="label">Client Type:</td>
+                        <td class="value">' . htmlspecialchars($clientType) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Address:</td>
+                        <td class="wide" colspan="3">' . htmlspecialchars($address) . ', ' . htmlspecialchars($city) . ', ' . htmlspecialchars($state) . ', ' . htmlspecialchars($zip) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Emergency Contact:</td>
+                        <td class="value">' . htmlspecialchars($emergencyContact) . '</td>
+                        <td class="label">Emergency Phone:</td>
+                        <td class="value">' . htmlspecialchars($emergencyPhone) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Special Requests:</td>
+                        <td class="wide" colspan="3">' . htmlspecialchars($specialRequests) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Notes:</td>
+                        <td class="wide" colspan="3">' . htmlspecialchars($notes) . '</td>
+                    </tr>
+                    <tr>
+                        <td class="label">Travel Document:</td>
+                        <td class="wide" colspan="3">' . $fileLink . '</td>
+                    </tr>
+                </table>
+            
+                <div class="footer">
+                    Trek Africa Adventures Ltd | Call Us: +254 725 925339 | Email: info@trekkafrika.com
+                </div>
+                ';
+
+        // Write the HTML content to the PDF
+        $pdf->writeHTML($html, true, false, true, false, '');
+
+        // Output the PDF as a download
+        $pdf->Output($fileName, 'D');
+    }
+   
+    public static function allclientsPDF(array $reports, string $reportTitle, string $fileName = 'ClientsList.pdf')
+    {
+        // Create a new TCPDF instance with landscape orientation
+        $pdf = new TCPDF('L', 'mm', 'A4');
+        // Set document information
+        $pdf->SetCreator('TREK AFRICA ADVENTURES');
+        $pdf->SetAuthor(author: 'KaribuWEBDev');
+        $pdf->SetTitle('Reports');
+        $pdf->SetSubject('Report Data');
+        $pdf->SetKeywords('Reports, PDF');
+
+        // Set default header and footer
+        $pdf->setHeaderData('', 0, $reportTitle);
+        $pdf->setFooterMargin(15);
+        // Set margins
+        $pdf->SetMargins(10, 15, 10); // Adjusted for landscape
+        $pdf->SetHeaderMargin(10);
+        $pdf->SetFooterMargin(10);
+
+        // Add a page
+        $pdf->AddPage();
+
+        // Set font
+        $pdf->SetFont('helvetica', '', 10);
+        // Add Logo
+        $logoPath = $_SERVER['DOCUMENT_ROOT'] . "/assets/media/logos/logo.png"; // Absolute path to the logo
+        if (file_exists($logoPath)) {
+            $pdf->Image($logoPath, 90, 20, 50); // Centered and properly sized
+        }
+        $pdf->Ln(30);
+        // Create HTML content for the PDF
+        $html = '<h1>Report Data</h1>';
+        $html .= '<table border="1" cellpadding="5" cellspacing="0" style="width:100%; border-collapse: collapse;">';
+        $html .= '<thead>
+            <tr style="background-color: #f2f2f2;">
+                <th style="width:13%;">Name</th>
+                <th style="width:8%;">Nationality</th>
+                <th style="width:5%;">Gender</th>
+                <th style="width:10%;">Email Address</th>
+                <th style="width:5%;">Client Type</th>
+                <th style="width:10%;">Passport ID</th>
+                <th style="width:10%;">Date Created</th>
+                <th style="width:10%;">Travel Document</th>
+                <th style="width:27%;">Special Requests</th>
+            </tr>
+        </thead>';
+        $html .= '<tbody>';
+        foreach ($reports as $report) {
+            // Extract data from the report with null-safe checks
+            $name = htmlspecialchars($report['full_name'] ?? '');
+            $email = htmlspecialchars($report['email'] ?? '');
+            $nationality = htmlspecialchars($report['nationality'] ?? '');
+            $passport = htmlspecialchars($report['passport_number'] ?? '');
+            $gender = htmlspecialchars($report['gender'] ?? '');
+            $client_type = htmlspecialchars($report['client_type'] ?? '');
+            $dateCreated = htmlspecialchars($report['created_at'] ?? '');
+            $specialReq = htmlspecialchars($report['special_requests'] ?? '');
+            // Handle file link
+            $fileLink = $report['file_path']
+                ? '<a href="' . $_ENV['base_site_url'] . '/servefile?file=' . $report['file_path'] . '&download=true">Download</a>'
+                : 'N/A';
+            // Add row to the table
+
+            $html .= '<tr>
+                <td style="width:13%;">' . $name . '</td>
+                <td style="width:8%;">' . $nationality . '</td>
+                <td style="width: 5%;">' . $gender . '</td>
+                <td style="width: 10%;">' . $email . '</td>
+                <td style="width:5%;">' . $client_type . '</td>
+                <td style="width:10%;">' . $passport . '</td>
+                <td style="width:10%;">' . $dateCreated . '</td>
+                <td style="width:10%;">' . $fileLink . '</td>
+                <td style="width:27%;">' . $specialReq . '</td>
+            </tr>';
+        }
+
+        $html .= '</tbody>';
+        $html .= '</table>';
+
+        // Write the HTML content to the PDF
+        $pdf->writeHTML($html, true, false, true, false, '');
+
+        // Output the PDF as a download
+        $pdf->Output($fileName, 'D');
+    }
+   
+}

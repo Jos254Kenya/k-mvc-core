@@ -20,6 +20,20 @@ Welcome to the **Custom MVC Framework**! This framework is inspired by the routi
 - **Templating Engine**: Basic templating for dynamic views.
 - **Error Handling**: Developer-friendly error pages and detailed stack traces.
 
+## What's New
+- More and advanced crud methods. [Directry call model::query(string $query, array $params =null)], updateOrCreate method and many more amazing methods
+- More validation rules, [image, file, ip, json,] etc. Explore the rules by self::RULE_NAME
+```php 
+    public function rules(): array
+    {
+        return [
+            'destination_id' => [self::RULE_REQUIRED, self::RULE_DIGIT],
+            'name' => [self::RULE_REQUIRED],
+            'num_people' => [self::RULE_REQUIRED],
+            'base_price' => [self::RULE_REQUIRED,[self::RULE_MIN, 'min' => 1]],
+        ];
+    }
+```
 ## 📋 Requirements
 
 - PHP 7.4 or higher
@@ -32,7 +46,7 @@ Welcome to the **Custom MVC Framework**! This framework is inspired by the routi
 ### 1. Install via Composer
 
 ```bash
-composer require sigawa/mvc-core:^1.0.2
+composer require sigawa/mvc-core:^1.0.3
 ```
 
 ### 2. Clone the Repository

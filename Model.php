@@ -19,6 +19,20 @@ class Model
     const RULE_SPECIAL_CHAR = 'special_char';
     const RULE_PHONE = 'phone';
     const RULE_CHECKBOX = 'checkbox';
+    const RULE_NUMERIC = 'numeric';
+    const RULE_INTEGER = 'integer';
+    const RULE_FLOAT = 'float';
+    const RULE_BOOLEAN = 'boolean';
+    const RULE_DATE = 'date';
+    const RULE_URL = 'url';
+    const RULE_REGEX = 'regex';
+    const RULE_ALPHA = 'alpha';
+    const RULE_ALPHANUMERIC = 'alphanumeric';
+    const RULE_JSON = 'json';
+    const RULE_IP = 'ip';
+    const RULE_FILE = 'file';
+    const RULE_IMAGE = 'image';
+    const RULE_NUMBER = 'number';
 
 
     public array $errors = [];
@@ -61,6 +75,26 @@ class Model
 
         return $result ?: null; // Return null if no record is found
     }
+    public static function executeQuery(string $query, array $params = []): bool|int
+    {
+        $db = Application::$app->db->pdo;
+        $stmt = $db->prepare($query);
+
+        foreach ($params as $key => $value) {
+            $stmt->bindValue(":$key", $value);
+        }
+
+        if ($stmt->execute()) {
+            // If the query is an INSERT, return the last inserted ID.
+            if (str_starts_with(strtoupper(trim($query)), 'INSERT')) {
+                return (int) $db->lastInsertId();
+            }
+            return true; // Query executed successfully
+        }
+
+        return false; // Query failed
+    }
+
     public function attributes(): array
     {
         return [];
@@ -99,61 +133,111 @@ class Model
                 if (!is_string($rule)) {
                     $ruleName = $rule[0];
                 }
-    
-                if ($ruleName === self::RULE_CHECKBOX && $value < 1) {
-                    $this->addError($attribute, self::RULE_CHECKBOX);
-                }
-                if ($ruleName === self::RULE_UPPERCASE && !preg_match('/[A-Z]/', $value)) {
-                    $this->addErrorByRule($attribute, self::RULE_UPPERCASE);
-                }
-                if ($ruleName === self::RULE_LOWERCASE && !preg_match('/[a-z]/', $value)) {
-                    $this->addErrorByRule($attribute, self::RULE_LOWERCASE);
-                }
-                if ($ruleName === self::RULE_SPECIAL_CHAR && !preg_match('/[^a-zA-Z\d]/', $value)) {
-                    $this->addErrorByRule($attribute, self::RULE_SPECIAL_CHAR);
-                }
-                if ($ruleName === self::RULE_DIGIT && !preg_match('/\d/', $value)) {
-                    $this->addErrorByRule($attribute, self::RULE_DIGIT);
-                }
-                if ($ruleName === self::RULE_REQUIRED && !$value) {
+
+                // Required field
+                if ($ruleName === self::RULE_REQUIRED && empty($value)) {
                     $this->addErrorByRule($attribute, self::RULE_REQUIRED);
                 }
+
+                // Email validation
                 if ($ruleName === self::RULE_EMAIL && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
                     $this->addErrorByRule($attribute, self::RULE_EMAIL);
                 }
+
+                // Min & Max length validation
                 if ($ruleName === self::RULE_MIN && strlen($value) < $rule['min']) {
                     $this->addErrorByRule($attribute, self::RULE_MIN, ['min' => $rule['min']]);
                 }
                 if ($ruleName === self::RULE_MAX && strlen($value) > $rule['max']) {
                     $this->addErrorByRule($attribute, self::RULE_MAX, ['max' => $rule['max']]);
                 }
-                if ($ruleName === self::RULE_MATCH && $value !== $this->{$rule['match']}) {
-                    $this->addErrorByRule($attribute, self::RULE_MATCH, ['match' => $rule['match']]);
+
+                // Numeric validation
+                if ($ruleName === self::RULE_NUMERIC && !is_numeric($value)) {
+                    $this->addErrorByRule($attribute, self::RULE_NUMERIC);
                 }
-    
+                if ($ruleName === self::RULE_INTEGER && !filter_var($value, FILTER_VALIDATE_INT)) {
+                    $this->addErrorByRule($attribute, self::RULE_INTEGER);
+                }
+                if ($ruleName === self::RULE_FLOAT && !filter_var($value, FILTER_VALIDATE_FLOAT)) {
+                    $this->addErrorByRule($attribute, self::RULE_FLOAT);
+                }
+
+                // Boolean validation
+                if ($ruleName === self::RULE_BOOLEAN && !is_bool(filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE))) {
+                    $this->addErrorByRule($attribute, self::RULE_BOOLEAN);
+                }
+
+                // Date validation
+                if ($ruleName === self::RULE_DATE && !strtotime($value)) {
+                    $this->addErrorByRule($attribute, self::RULE_DATE);
+                }
+
+                // URL validation
+                if ($ruleName === self::RULE_URL && !filter_var($value, FILTER_VALIDATE_URL)) {
+                    $this->addErrorByRule($attribute, self::RULE_URL);
+                }
+
+                // IP validation
+                if ($ruleName === self::RULE_IP && !filter_var($value, FILTER_VALIDATE_IP)) {
+                    $this->addErrorByRule($attribute, self::RULE_IP);
+                }
+
+                // Alpha (only letters)
+                if ($ruleName === self::RULE_ALPHA && !ctype_alpha(str_replace(' ', '', $value))) {
+                    $this->addErrorByRule($attribute, self::RULE_ALPHA);
+                }
+
+                // Alphanumeric
+                if ($ruleName === self::RULE_ALPHANUMERIC && !ctype_alnum(str_replace(' ', '', $value))) {
+                    $this->addErrorByRule($attribute, self::RULE_ALPHANUMERIC);
+                }
+
+                // JSON validation
+                if ($ruleName === self::RULE_JSON && json_decode($value) === null && json_last_error() !== JSON_ERROR_NONE) {
+                    $this->addErrorByRule($attribute, self::RULE_JSON);
+                }
+
+                // Regex pattern validation
+                if ($ruleName === self::RULE_REGEX && !preg_match($rule['pattern'], $value)) {
+                    $this->addErrorByRule($attribute, self::RULE_REGEX);
+                }
+
+                // File validation (ensure uploaded)
+                if ($ruleName === self::RULE_FILE && !isset($_FILES[$attribute])) {
+                    $this->addErrorByRule($attribute, self::RULE_FILE);
+                }
+
+                // Image validation (ensure file is an image)
+                if ($ruleName === self::RULE_IMAGE) {
+                    $allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                    if (!in_array(mime_content_type($_FILES[$attribute]['tmp_name']), $allowedTypes)) {
+                        $this->addErrorByRule($attribute, self::RULE_IMAGE);
+                    }
+                }
                 // ✅ Unique Validation with Optional Except ID
                 if ($ruleName === self::RULE_UNIQUE) {
                     $className = $rule['class'];
                     $uniqueAttr = $rule['attribute'] ?? $attribute;
                     $tableName = $className::tableName();
                     $db = Application::$app->db;
-    
+
                     $query = "SELECT * FROM $tableName WHERE $uniqueAttr = :$uniqueAttr";
-    
+
                     if ($exceptId) { // Only exclude ID if provided
                         $query .= " AND id != :exceptId";
                     }
-    
+
                     $statement = $db->prepare($query);
                     $statement->bindValue(":$uniqueAttr", $value);
-    
+
                     if ($exceptId) {
                         $statement->bindValue(":exceptId", $exceptId);
                     }
-    
+
                     $statement->execute();
                     $record = $statement->fetchObject();
-    
+
                     if ($record) {
                         $this->addErrorByRule($attribute, self::RULE_UNIQUE);
                     }
@@ -170,15 +254,25 @@ class Model
         return [
 
             self::RULE_UNIQUE => 'Record with this {field} or username already exists',
-            self::RULE_REQUIRED => '{field} field is required',
-            self::RULE_EMAIL => '{field} field must contain a valid email address e.g example@karsch.com',
-            self::RULE_MAX => 'The maximum length for {field} MUST not exceed {max} characters for this field',
-            self::RULE_MIN => 'The minimum length for {field} is {min} characters for this field',
-            self::RULE_MATCH => '{field} field must be the same as {match} field',
-            self::RULE_DIGIT => '{field} must contain at least one Number',
-            self::RULE_LOWERCASE => '{field} MUST contain at least one Lowercase character',
-            self::RULE_SPECIAL_CHAR => '{field} field MUST contain at least one special character',
-            self::RULE_UPPERCASE => '{field} field MUST contain at least one Uppercase character',
+            self::RULE_REQUIRED => '{field} is required.',
+        self::RULE_EMAIL => '{field} must be a valid email address.',
+        self::RULE_MIN => '{field} must be at least {min} characters.',
+        self::RULE_MAX => '{field} cannot exceed {max} characters.',
+        self::RULE_NUMERIC => '{field} must be a numeric value.',
+        self::RULE_INTEGER => '{field} must be an integer.',
+        self::RULE_FLOAT => '{field} must be a decimal number.',
+        self::RULE_BOOLEAN => '{field} must be true or false.',
+        self::RULE_DATE => '{field} must be a valid date.',
+        self::RULE_URL => '{field} must be a valid URL.',
+        self::RULE_IP => '{field} must be a valid IP address.',
+        self::RULE_ALPHA => '{field} must contain only letters.',
+        self::RULE_ALPHANUMERIC => '{field} must contain only letters and numbers.',
+        self::RULE_JSON => '{field} must be a valid JSON string.',
+        self::RULE_REGEX => '{field} is not in the correct format.',
+        self::RULE_FILE => 'A file must be uploaded for {field}.',
+        self::RULE_IMAGE => '{field} must be a valid image (JPEG, PNG, GIF, WebP).',
+        self::RULE_NUMBER => '{field} must be a whole number (digits only).',
+
         ];
     }
 

@@ -66,6 +66,49 @@ abstract class DbModel extends Model
             return true;  // Insert was successful
         }
     }
+  
+    public static function findAllByQuery(string $query, array $params = [])
+    {
+        $statement = self::prepare($query);
+
+        foreach ($params as $key => $value) {
+            $statement->bindValue(":$key", $value);
+        }
+
+        $statement->execute();
+        return $statement->fetchAll(\PDO::FETCH_ASSOC); // Fetch all as associative array
+    }
+
+    public static function query(string $query, array $params = [])
+    {
+        $statement = self::prepare($query);
+
+        foreach ($params as $key => $value) {
+            $statement->bindValue(":$key", $value);
+        }
+
+        return $statement->execute(); // Execute and return success/failure
+    }
+
+    public static function updateOrCreate(array $conditions, array $data)
+    {
+        // Check if a record exists
+        $existingRecord = static::findOne($conditions);
+        if ($existingRecord) {
+            // Update existing record
+            foreach ($data as $key => $value) {
+                $existingRecord->$key = $value;
+            }
+            return $existingRecord->save() ? $existingRecord : false;
+        }
+        // Create new record
+        $newRecord = new static();
+        foreach (array_merge($conditions, $data) as $key => $value) {
+            $newRecord->$key = $value;
+        }
+
+        return $newRecord->save() ? $newRecord : false;
+    }
 
 
     public static function prepare($sql): \PDOStatement

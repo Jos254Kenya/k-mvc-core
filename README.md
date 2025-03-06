@@ -32,9 +32,11 @@ Welcome to the **Custom MVC Framework**! This framework is inspired by the routi
 ### 1. Install via Composer
 
 ```bash
-composer require sigawa/mvc-core:^1.0.2
+composer require sigawa/mvc-core:^1.0.4
 ```
-
+### WHAT'S NEW 
+API calls and protected routes using Middlewares
+Auth logic handling seamlessly with access_tokens
 ### 2. Clone the Repository
 
 ```bash

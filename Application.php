@@ -3,7 +3,8 @@
 namespace sigawa\mvccore;
 
 use sigawa\mvccore\db\Database;
-use Dotenv\Dotenv; // For environment configuration
+use Dotenv\Dotenv;
+use sigawa\mvccore\services\RedisService; // For environment configuration
 
 class Application
 {
@@ -23,8 +24,10 @@ class Application
     public Session $session;
     public View $view;
     public ?UserModel $user;
-    public array $services = []; // Service container
+    public AuthProvider $auth;
 
+    public array $services = []; // Service container
+    public RedisService $redis;
     public function __construct($rootDir, $config)
     {
         $this->user = null;
@@ -40,6 +43,7 @@ class Application
         $this->db = new Database($config['db']);
         $this->session = new Session();
         $this->view = new View();
+        $this->redis = new RedisService();
 
         // Register default services
         $this->registerService('request', $this->request);
@@ -48,16 +52,20 @@ class Application
         $this->registerService('db', $this->db);
         $this->registerService('session', $this->session);
         $this->registerService('view', $this->view);
+        $this->registerService('redis', $this->redis);
+        $this->auth = new AuthProvider();
+        $this->registerService('auth', $this->auth);
 
-        $userId = Application::$app->session->get('user');
-        if ($userId) {
-            $key = $this->userClass::primaryKey();
-            $this->user = $this->userClass::findOne([$key => $userId]);
-            if (!$this->user) {
+
+        if ($userId = $this->session->get('user')) {
+            $user = $this->userClass::findOne([$this->userClass::primaryKey() => $userId]);
+            if ($user) {
+                AuthProvider::setUser($user);
+            } else {
                 // Clear user session
-                Application::$app->session->remove('user');
+                $this->session->remove('user');
                 // Redirect to staff login page
-                $this->response->redirect("stafflogin"); // Adjust the URL as needed
+                $this->response->redirect($_ENV['MAIN_REDIRECT_PAGE']); // Adjust the URL as needed
                 exit; // Ensure script execution stops after redirect
             }
         }
@@ -78,34 +86,29 @@ class Application
 
     public function login(UserModel $user)
     {
-        $this->user = $user;
-        $className = get_class($user);
-        $primaryKey = $className::primaryKey();
-        $value = $user->{$primaryKey};
-        Application::$app->session->set('user', $value);
+        AuthProvider::setUser($user);
         return true;
     }
 
-    public function loginCustomer(UserModel $user)
+    public function guestLogin(UserModel $user)
     {
         $this->user = $user;
         $className = get_class($user);
         $primaryKey = $className::primaryKey();
         $value = $user->{$primaryKey};
-        Application::$app->session->set('customerid', $value);
+        Application::$app->session->set('guest', $value);
         return true;
     }
 
     public function logout()
     {
-        $this->user = null;
-        self::$app->session->remove('user');
+        AuthProvider::logout();
     }
 
-    public function logoutCustomer()
+    public function logoutGuest()
     {
         $this->user = null;
-        self::$app->session->remove('customerid');
+        self::$app->session->remove('guest');
     }
 
     public function run()
@@ -122,18 +125,32 @@ class Application
 
     private function handleException(\Exception $e)
     {
-        // Centralized error handling
+        $request = $this->request;
+        $response = $this->response;
+
+        // Check if the request is an API request
+        $isApiRequest = str_starts_with($request->getUrl(), '/api');
+        // Determine HTTP status code
+        $statusCode = method_exists($e, 'getCode') && $e->getCode() ? $e->getCode() : 500;
+        $response->statusCode($statusCode);
+
+        if ($isApiRequest) {
+            // Return JSON error response for API requests
+            return $response->json([
+                'error' => $e->getMessage(),
+                'status' => $statusCode
+            ], $statusCode);
+        }
+
+        // For web requests, render an error page
         if (getenv('APP_DEBUG') === 'true') {
-            echo $this->view->renderView('_error', [
-                'exception' => $e,
-            ]);
+            echo $this->view->renderView('_error', ['exception' => $e]);
         } else {
-            $this->response->statusCode(500);
-            echo $this->view->renderView('_error', [
-                'exception' => $e,
-            ]);
+            $response->statusCode(500);
+            echo $this->view->renderView('_error', ['exception' => $e]);
         }
     }
+
 
     public function triggerEvent($eventName)
     {
@@ -142,7 +159,7 @@ class Application
             call_user_func($callback);
         }
     }
-    
+
     public function on($eventName, $callback)
     {
         $this->eventListeners[$eventName][] = $callback;

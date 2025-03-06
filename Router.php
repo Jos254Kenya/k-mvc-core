@@ -92,16 +92,29 @@ class Router
 
     public function group(string $prefix, callable $callback, array $middlewares = [])
     {
-        $originalRequestUrl = $this->request->getUrl(); // Store the original URL
-        $this->request->setUrl($prefix . '/' . ltrim($originalRequestUrl, '/'));
-    
-        // Pass the current router instance ($this) to the callback
+        $previousRoutes = $this->routeMap; // Backup existing routes
+
+        $this->routeMap = array_map(function ($routes) use ($prefix, $middlewares) {
+            $newRoutes = [];
+            foreach ($routes as $route => $details) {
+                $newRoute = rtrim($prefix, '/') . '/' . ltrim($route, '/');
+                $newRoutes[$newRoute] = [
+                    'callback' => $details['callback'],
+                    'middlewares' => array_merge($middlewares, $details['middlewares'] ?? [])
+                ];
+            }
+            return $newRoutes;
+        }, $this->routeMap);
+
+        // Execute the callback (which will register routes within this modified context)
         call_user_func($callback, $this);
-    
-        // Restore the original URL after defining grouped routes
-        $this->request->setUrl($originalRequestUrl);
+
+        // Merge back the updated routes
+        foreach ($this->routeMap as $method => $routes) {
+            $previousRoutes[$method] = array_merge($previousRoutes[$method], $routes);
+        }
+        $this->routeMap = $previousRoutes; // Restore full routes
     }
-   
 
     public function resolve()
     {

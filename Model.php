@@ -37,8 +37,15 @@ class Model
 
     public array $errors = [];
 
+    public function defaultValues():array
+    {
+        return [];
+    }
     public function loadData($data)
     {
+        // Merge default values with incoming data (incoming data takes priority)
+        $data = array_merge($this->defaultValues(), $data);
+    
         foreach ($data as $key => $value) {
             if (property_exists($this, $key)) {
                 $this->{$key} = $value;

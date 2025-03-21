@@ -15,6 +15,7 @@ class Application
     public static Application $app;
     public static string $ROOT_DIR;
     public string $userClass;
+    public ?string $guestClass = null; // Allow dynamic guest user model
     public string $layout = 'main';
     public Router $router;
     public Request $request;
@@ -32,6 +33,8 @@ class Application
     {
         $this->user = null;
         $this->userClass = $config['userClass'];
+        $this->userClass = $config['userClass']; // Default user model
+        $this->guestClass = $config['guestClass'] ?? null; // Optional guest model
         self::$ROOT_DIR = $rootDir;
         self::$app = $this;
 
@@ -44,71 +47,62 @@ class Application
         $this->session = new Session();
         $this->view = new View();
         $this->redis = new RedisService();
-
         // Register default services
-        $this->registerService('request', $this->request);
-        $this->registerService('response', $this->response);
-        $this->registerService('router', $this->router);
-        $this->registerService('db', $this->db);
-        $this->registerService('session', $this->session);
-        $this->registerService('view', $this->view);
-        $this->registerService('redis', $this->redis);
+
         $this->auth = new AuthProvider();
         $this->registerService('auth', $this->auth);
-
-
-        if ($userId = $this->session->get('user')) {
-            $user = $this->userClass::findOne([$this->userClass::primaryKey() => $userId]);
-            if ($user) {
-                AuthProvider::setUser($user);
-            } else {
-                // Clear user session
-                $this->session->remove('user');
-                // Redirect to staff login page
-                $this->response->redirect($_ENV['MAIN_REDIRECT_PAGE']); // Adjust the URL as needed
-                exit; // Ensure script execution stops after redirect
-            }
+        $this->registerService('google_oauth', new \sigawa\mvccore\auth\providers\GoogleOAuth());
+        // Register services
+        foreach (['request', 'response', 'router', 'db', 'session', 'view', 'redis', 'auth'] as $service) {
+            $this->registerService($service, $this->$service);
         }
+        // Fetch user from AuthProvider
+        $this->user = AuthProvider::user();
     }
 
     private function loadEnvironment($rootDir)
     {
         if (file_exists($rootDir . '/.env')) {
-            $dotenv = Dotenv::createImmutable($rootDir);
+            $dotenv = \Dotenv\Dotenv::createImmutable($rootDir);
             $dotenv->load();
         }
     }
 
-    public static function isGuest()
-    {
-        return !self::$app->user;
-    }
-
-    public function login(UserModel $user)
-    {
-        AuthProvider::setUser($user);
-        return true;
-    }
+    
+  
 
     public function guestLogin(UserModel $user)
     {
+        $this->session->set('guest', $user->id);
+        $this->session->set('auth_model', get_class($user)); // Store model class in session
         $this->user = $user;
-        $className = get_class($user);
-        $primaryKey = $className::primaryKey();
-        $value = $user->{$primaryKey};
-        Application::$app->session->set('guest', $value);
+        return true;
+    }
+    public function login(UserModel $user)
+    {
+        $this->session->set('user', $user->id);
+        $this->session->set('auth_model', get_class($user)); // Store model class in session
+        $this->user = $user;
+        AuthProvider::setUser($user);
         return true;
     }
 
     public function logout()
     {
         AuthProvider::logout();
+        $this->user = null;
     }
 
     public function logoutGuest()
     {
+        $this->session->remove('guest');
+        $this->session->remove('auth_model'); // Remove stored model
         $this->user = null;
-        self::$app->session->remove('guest');
+    }
+
+    public static function isGuest(): bool
+    {
+        return !AuthProvider::check();
     }
 
     public function run()

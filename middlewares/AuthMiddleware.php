@@ -46,22 +46,28 @@ class AuthMiddleware extends BaseMiddleware
         }
 
         // Extract token for authentication
-        $token = $this->extractTokenFromHeader($request);
+        $token = $this->isApi
+            ? $this->extractTokenFromHeader($request)
+            : Application::$app->session->get('session_token');
 
-        if ($token && AuthProvider::validateToken($token)) {
-            $user = AuthProvider::user();
-            if ($user) {
-                AuthProvider::setUser($user, false); // Do not generate a new token
-            }
+        if (!$token || !AuthProvider::validateToken($token)) {
+            $this->handleUnauthorized($response); // Block unauthorized users
         }
 
+        // Set the authenticated user
+        $user = AuthProvider::user();
+        if ($user) {
+            AuthProvider::setUser($user, false); // Do not generate a new token
+        } else {
+            $this->handleUnauthorized($response); // Block if user not found
+        }
 
         // Role-based access control (if roles are defined)
-        if (!empty($this->allowedRoles)) {
-            $user = AuthProvider::user();
-            if (!$user || !in_array($user->role ?? 'guest', $this->allowedRoles)) {
-                throw new ForbiddenException("You do not have permission to access this resource.");
-            }
+        if (!empty($this->allowedRoles) && (!$user || !in_array($user->role ?? 'guest', $this->allowedRoles))) {
+            return $response->json([
+                'success' => false,
+                'error' => "You do not have the right permissions to perform this action(s)",
+            ], 403);
         }
     }
 
@@ -104,16 +110,18 @@ class AuthMiddleware extends BaseMiddleware
     private function handleUnauthorized(Response $response)
     {
         error_log("Unauthorized request. API mode: " . ($this->isApi ? 'true' : 'false'));
-
         if ($this->isApi) {
-            throw new UnauthorizedException("Invalid or missing authentication token.");
+                return $response->json([
+                'error' => "Invalid or missing authentication token..",
+            ]);
         }
 
         if ($this->redirectUrl) {
             $response->redirect($this->redirectUrl);
             return;
         }
-
-        throw new ForbiddenException("You must be logged in to access this resource.");
+        return $response->json([
+            'error' => "You must be logged in to access this resource.",
+        ]);
     }
 }

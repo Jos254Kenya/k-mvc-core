@@ -19,34 +19,72 @@ class Database
         $this->pdo = new \PDO($dbDsn, $username, $password);
         $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     }
+
     public function applyMigrations()
     {
         $this->createMigrationsTable();
         $appliedMigrations = $this->getAppliedMigrations();
+        $migrationFiles = scandir(Application::$ROOT_DIR . '/migrations');
 
-        $newMigrations = [];
-        $files = scandir(Application::$ROOT_DIR . '/migrations');
-        $toApplyMigrations = array_diff($files, $appliedMigrations);
-        foreach ($toApplyMigrations as $migration) {
-            if ($migration === '.' || $migration === '..') {
-                continue;
-            }
+        $newMigrations = array_diff($migrationFiles, $appliedMigrations);
 
-            require_once Application::$ROOT_DIR . '/migrations/' . $migration;
-            $className = pathinfo($migration, PATHINFO_FILENAME);
-            $instance = new $className();
-            $this->log("Applying migration $migration");
-            $instance->up();
-            $this->log("Applied migration $migration");
-            $newMigrations[] = $migration;
+        if (empty($newMigrations)) {
+            $this->log("No new migrations to apply.");
+            return;
         }
 
-        if (!empty($newMigrations)) {
-            $this->saveMigrations($newMigrations);
-        } else {
-            $this->log("There are no migrations to apply");
+        try {
+            $this->beginTransaction();
+            foreach ($newMigrations as $migration) {
+                if ($migration === '.' || $migration === '..') continue;
+
+                require_once Application::$ROOT_DIR . '/migrations/' . $migration;
+                $className = pathinfo($migration, PATHINFO_FILENAME);
+                $instance = new $className();
+
+                $this->log("Applying migration $migration...");
+                $instance->up();
+                $this->log("Successfully applied $migration.");
+
+                $this->saveMigrations($migration);
+            }
+            $this->commit();
+        } catch (\Exception $e) {
+            $this->rollBack();
+            $this->log("Migration failed: " . $e->getMessage());
         }
     }
+
+    public function rollbackLastMigration()
+    {
+        $lastMigration = $this->getLastMigration();
+        if (!$lastMigration) {
+            $this->log("No migrations to rollback.");
+            return;
+        }
+
+        require_once Application::$ROOT_DIR . '/migrations/' . $lastMigration;
+        $className = pathinfo($lastMigration, PATHINFO_FILENAME);
+        $instance = new $className();
+
+        $this->log("Rolling back $lastMigration...");
+        $instance->down();
+        $this->removeMigration($lastMigration);
+        $this->log("$lastMigration rollback successful.");
+    }
+    protected function removeMigration(string $migration)
+{
+    $statement = $this->pdo->prepare("DELETE FROM migrations WHERE migration = :migration");
+    $statement->execute(['migration' => $migration]);
+}
+
+    public function refreshMigrations()
+    {
+        $this->log("Refreshing all migrations...");
+        $this->rollbackAllMigrations();
+        $this->applyMigrations();
+    }
+
 
     protected function createMigrationsTable()
     {
@@ -71,7 +109,43 @@ class Database
         $statement = $this->pdo->prepare("INSERT INTO migrations (migration) VALUES  $str ");
         $statement->execute();
     }
-
+    protected function getLastMigration(): ?string
+    {
+        $statement = $this->pdo->prepare("SELECT migration FROM migrations ORDER BY id DESC LIMIT 1");
+        $statement->execute();
+        return $statement->fetchColumn() ?: null;
+    }
+ 
+    public function rollbackAllMigrations()
+    {
+        $appliedMigrations = $this->getAppliedMigrations();
+    
+        if (empty($appliedMigrations)) {
+            $this->log("No migrations to rollback.");
+            return;
+        }
+    
+        $this->beginTransaction();
+    
+        try {
+            foreach (array_reverse($appliedMigrations) as $migration) {
+                require_once Application::$ROOT_DIR . '/migrations/' . $migration;
+                $className = pathinfo($migration, PATHINFO_FILENAME);
+                $instance = new $className();
+    
+                $this->log("Rolling back $migration...");
+                $instance->down();
+                $this->removeMigration($migration);
+                $this->log("$migration rollback successful.");
+            }
+    
+            $this->commit();
+        } catch (\Exception $e) {
+            $this->rollBack();
+            $this->log("Rollback failed: " . $e->getMessage());
+        }
+    }
+            
     public function prepare($sql): \PDOStatement
     {
         return $this->pdo->prepare($sql);
@@ -80,21 +154,24 @@ class Database
     public function lastInsertId()
     {
         return $this->pdo->lastInsertId();
-}
+    }
     private function log($message)
     {
         echo "[" . date("Y-m-d H:i:s") . "] - " . $message . PHP_EOL;
     }
 
-    public function beginTransaction() {
+    public function beginTransaction()
+    {
         return $this->pdo->beginTransaction();
     }
 
-    public function commit() {
+    public function commit()
+    {
         return $this->pdo->commit();
     }
 
-    public function rollBack() {
+    public function rollBack()
+    {
         return $this->pdo->rollBack();
     }
 }

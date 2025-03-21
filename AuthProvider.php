@@ -6,32 +6,48 @@ class AuthProvider
 {
     private static ?UserModel $user = null; // Cached user instance
 
-    public static function user(): ?UserModel
+    public function __construct()
     {
-        if (self::$user === null) {
-            $userId = Application::$app->session->get('user');
-            $sessionToken = Application::$app->session->get('session_token');
-            $isApiRequest = !empty(getallheaders()['Authorization']); // Check if API request
+        $this->loadUser();
+    }
 
-            // If session token is missing, check Authorization header
-            if (!$sessionToken && $isApiRequest) {
-                $headers = getallheaders();
-                if (!empty($headers['Authorization']) && preg_match('/Bearer\s(\S+)/', $headers['Authorization'], $matches)) {
-                    $sessionToken = $matches[1];
-                }
-            }
+    private function loadUser()
+    {
+        $session = Application::$app->session;
+        $defaultUserClass = Application::$app->userClass;
+        $guestUserClass = Application::$app->guestClass;
 
-            if ($sessionToken) {
-                $user = Application::$app->userClass::findOne(['session_token' => $sessionToken]);
+        $authModel = $session->get('auth_model') ?? $defaultUserClass; // Use stored model or default
 
-                if ($user) {
-                    self::$user = $user;
-                } elseif ($userId && !$isApiRequest) {
-                    // Only log out session-based users, not API users
-                    self::logout();
-                }
+        if (!class_exists($authModel)) {
+            return; // Prevent loading an invalid class
+        }
+
+        $sessionToken = $session->get('session_token');
+
+        // First, try session token authentication
+        if ($sessionToken) {
+            $user = $authModel::findOne(['session_token' => $sessionToken]);
+            if ($user) {
+                self::$user = $user;
+                return;
             }
         }
+
+        // Fallback to userId-based authentication if token is missing or invalid
+        $userId = $session->get('user') ?? $session->get('guest');
+        if ($userId) {
+            $user = $authModel::findOne([$authModel::primaryKey() => $userId]);
+            if ($user) {
+                self::$user = $user;
+            } else {
+                $this->clearSession(); // Use a helper method for better maintainability
+            }
+        }
+    }
+
+    public static function user(): ?UserModel
+    {
         return self::$user;
     }
 
@@ -44,46 +60,83 @@ class AuthProvider
     {
         return self::user() !== null;
     }
+
     public static function validateToken(string $token): bool
     {
-
-        error_log("Validating Token: " . $token);
-
         if (!$token) {
-            error_log("Token is missing!");
+            error_log("AuthProvider: Token is missing!");
             return false;
         }
+
         $user = Application::$app->userClass::findOne(['session_token' => $token]);
 
         if ($user) {
-            error_log("User found: " . json_encode($user));
             self::$user = $user; // Set authenticated user
             return true;
         }
 
-        error_log("No user found with this token.");
         return false;
     }
-
 
     public static function logout()
     {
         if (self::$user) {
-            self::$user->update(['session_token' => null]); // Clear session token from DB
+            self::$user->update(['session_token' => null]);
         }
         self::$user = null;
-        Application::$app->session->remove('user');
-        Application::$app->session->remove('session_token');
+        self::clearSession();
     }
 
-    public static function setUser(UserModel $user, bool $generateNewToken = true)
+    private static function clearSession()
     {
-        if ($generateNewToken) {
-            $user->session_token = bin2hex(random_bytes(32)); // Generate a secure token only if needed
-            $user->update(['session_token' => $user->session_token]); // Save to DB
-        }
-        self::$user = $user;
-        Application::$app->session->set('user', $user->id);
-        Application::$app->session->set('session_token', $user->session_token);
+        $session = Application::$app->session;
+        $session->remove('user');
+        $session->remove('session_token');
+        $session->remove('auth_model');
+        $session->remove('guest');
     }
+
+    public static function hasPermission(string $permission): bool
+    {
+        $user = self::user();
+        if (!$user) {
+            return false;
+        }
+
+        $permissions = $user->getPermissions(); // Fetch permissions from DB
+        return in_array($permission, $permissions, true);
+    }
+    public static function setUser($user, $remember = false)
+    {
+        $guestClass = Application::$app->guestClass;
+
+        if ($user instanceof $guestClass) {
+            Application::$app->session->set('guest', true);
+        } else {
+            Application::$app->session->set('guest', false);
+        }
+
+        Application::$app->session->set('user', $user->id);
+        Application::$app->user = $user;
+       
+    }
+
+    // public static function setUser(UserModel $user, bool $generateNewToken = true)
+    // {
+    //     $session = Application::$app->session;
+
+    //     if ($generateNewToken) {
+    //         $user->session_token = bin2hex(random_bytes(32));
+    //         $user->update(['session_token' => $user->session_token]);
+    //     }
+
+    //     self::$user = $user;
+
+    //     // **Security Improvement: Regenerate session ID on login**
+    //     session_regenerate_id(true);
+
+    //     $session->set('user', $user->id);
+    //     $session->set('session_token', $user->session_token);
+    //     $session->set('auth_model', get_class($user)); // Store model class
+    // }
 }

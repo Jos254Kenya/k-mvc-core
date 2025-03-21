@@ -19,7 +19,7 @@ abstract class UserModel extends DbModel
         $table = static::tableName();
         $primaryKey = static::primaryKey();
         $id = $this->{$primaryKey};
-        
+
         $columns = array_keys($data);
         $setClause = implode(', ', array_map(fn($col) => "$col = :$col", $columns));
 
@@ -36,5 +36,9 @@ abstract class UserModel extends DbModel
         $stmt->bindValue(':id', $id);
 
         return $stmt->execute();
+    }
+    public function toArray(): array
+    {
+        return get_object_vars($this); // Convert object properties to an array
     }
 }

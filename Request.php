@@ -25,6 +25,27 @@ class Request
         }
         return $this->cachedUrl;
     }
+    public function getIp(): string
+    {
+        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+            return $_SERVER['HTTP_CLIENT_IP']; // IP from shared internet
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            return explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0]; // First IP in chain
+        } else {
+            return $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'; // Default to localhost if unknown
+        }
+    }
+
+    public function getPath(): string
+    {
+        if ($this->cachedUrl === null) {
+            $url = $_SERVER['REQUEST_URI'] ?? '/';
+            $position = strpos($url, '?');
+            $this->cachedUrl = $position !== false ? substr($url, 0, $position) : $url;
+        }
+        return $this->cachedUrl;
+    }
+
     public function setUrl(string $url): void
     {
         $this->cachedUrl = $url;
@@ -65,14 +86,22 @@ class Request
 
     public function getParam(string $key, $default = null)
     {
+        // Check if it's a route parameter first
+        if (isset($this->routeParams[$key])) {
+            return $this->routeParams[$key];
+        }
+
+        // Otherwise, fallback to GET or POST
         if ($this->isGet()) {
             return $_GET[$key] ?? $default;
         }
         if ($this->isPost()) {
             return $_POST[$key] ?? $default;
         }
+
         return $default;
     }
+
     public function isGet(): bool
     {
         return $this->getMethod() === 'get';
@@ -83,7 +112,7 @@ class Request
         return $this->getMethod() === 'post';
     }
 
-    
+
 
     public function getIntParam(string $key, $default = null): ?int
     {
@@ -161,6 +190,20 @@ class Request
     public function getQueryParams(): array
     {
         return $_GET ?? [];
+    }
+    public function getQueryParam(string $key, $default = null)
+    {
+        return $_GET[$key] ?? $default;
+    }
+
+    public function getOAuthCode(): ?string
+    {
+        return $this->getQueryParam('code');
+    }
+
+    public function getOAuthState(): ?string
+    {
+        return $this->getQueryParam('state');
     }
 
     public function hasParam(string $key): bool

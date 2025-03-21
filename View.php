@@ -7,7 +7,7 @@ use sigawa\mvccore\exception\NotFoundException;
 
 class View
 {
-    public string $title = 'Karibu';
+    public string $title = 'Farmers Management Portal';
 
     public function renderView($view, array $params, $layoutDirectory = '')
     {

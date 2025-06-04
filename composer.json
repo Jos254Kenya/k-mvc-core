@@ -11,9 +11,13 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "sigawa\\mvccore\\": "."
+            "sigawa\\mvccore\\": "./",
+            "McConsole\\": "mcconsole/"
         }
     },
+    "bin": [
+        "bin/sigawa.php"
+    ],
     "authors": [
         {
             "name": "Joseph Sigawa",

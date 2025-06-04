@@ -129,8 +129,10 @@ class Router
         }
 
         $callback = $matchedRoute['callback'];
+        if (!is_callable($callback) && !(is_array($callback) && class_exists($callback[0]) && method_exists($callback[0], $callback[1]))) {
+            throw new \Exception("Invalid route callback defined for route: $method $url");
+        }
         $middlewares = $matchedRoute['middlewares'] ?? [];
-
         // Execute route-specific middlewares
         foreach ($middlewares as $middleware) {
             if ($middleware instanceof BaseMiddleware) {

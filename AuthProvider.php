@@ -106,7 +106,7 @@ class AuthProvider
         $permissions = $user->getPermissions(); // Fetch permissions from DB
         return in_array($permission, $permissions, true);
     }
-    public static function setUser($user, $remember = false)
+    public static function setUser($user, bool $generateNewToken = true)
     {
         $guestClass = Application::$app->guestClass;
 
@@ -115,10 +115,14 @@ class AuthProvider
         } else {
             Application::$app->session->set('guest', false);
         }
-
         Application::$app->session->set('user', $user->id);
+            if ($generateNewToken) {
+            $user->session_token = bin2hex(random_bytes(32));
+            Application::$app->session->set('session_token', $user->session_token);
+            $user->update(['session_token' => $user->session_token]);
+
+        }
         Application::$app->user = $user;
-       
     }
 
     // public static function setUser(UserModel $user, bool $generateNewToken = true)

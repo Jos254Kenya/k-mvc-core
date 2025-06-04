@@ -32,7 +32,7 @@ Welcome to the **Custom MVC Framework**! This framework is inspired by the routi
 ### 1. Install via Composer
 
 ```bash
-composer require sigawa/mvc-core:^1.0.5
+composer require sigawa/mvc-core:^1.0.3
 ```
 ### WHAT'S NEW 
 API calls and protected routes using Middlewares
@@ -339,8 +339,7 @@ sanitizing and forming the formData object
             }
             // Close the modal
             $("#kt_modal_add_agent").modal("hide");
-  // Swal.fire("Error", Array.isArray(response.errors) ? response.errors.join(", ") : response.errors || "An error occurred.");
-
+            // Swal.fire("Error", Array.isArray(response.errors) ? response.errors.join(", ") : response.errors || "An error occurred.");
             // Reset form
             $("#kt_modal_add_agent_form")[0].reset();
             $("#kt_modal_add_agent_form").removeData("agentId"); // Clear the agent ID

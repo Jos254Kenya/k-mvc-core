@@ -1,14 +1,16 @@
 {
     "name": "sigawa/mvccore",
-    "description": "Customized MVC mini-framework for Dev. purposes and offers room for improvements",
+    "description": "Customized MVC mini-framework for development purposes with room for improvements.",
     "type": "library",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "require": {
         "vlucas/phpdotenv": "5.6.x-dev",
         "symfony/console": "7.1.x-dev",
         "phpmailer/phpmailer": "dev-master",
         "predis/predis": "^3.0@alpha"
     },
-    "license": "MIT",
     "autoload": {
         "psr-4": {
             "sigawa\\mvccore\\": "./",
@@ -23,6 +25,5 @@
             "name": "Joseph Sigawa",
             "email": "sigawajoseph1@gmail.com"
         }
-    ],
-    "minimum-stability": "dev"
+    ]
 }

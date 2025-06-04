@@ -16,7 +16,7 @@
         }
     },
     "bin": [
-        "bin/sigawa.php"
+        "bin/sigawa"
     ],
     "authors": [
         {

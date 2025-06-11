@@ -78,13 +78,30 @@ abstract class DbModel extends Model
 
         if (!$this->isNewRecord) {
             // UPDATE LOGIC
-            $params = array_map(fn($attr) => "$attr = :$attr", $attributes);
-            $sql = "UPDATE $tableName SET " . implode(", ", $params) . " WHERE $primaryKey = :$primaryKey";
-            $statement = static::prepare($sql);
+            $setParts = [];
+            $params = [];
+            $replacements = [];
+
             foreach ($attributes as $attribute) {
-                $statement->bindValue(":$attribute", $this->{$attribute});
+                $value = $this->{$attribute};
+                $placeholder = ":$attribute";
+
+                if ($value instanceof \sigawa\mvccore\db\RawSQL) {
+                    $setParts[] = "$attribute = {$value}";
+                } else {
+                    $setParts[] = "$attribute = $placeholder";
+                    $params[$placeholder] = $value;
+                }
+            }
+
+            $sql = "UPDATE $tableName SET " . implode(", ", $setParts) . " WHERE $primaryKey = :$primaryKey";
+            $statement = static::prepare($sql);
+
+            foreach ($params as $key => $value) {
+                $statement->bindValue($key, $value);
             }
             $statement->bindValue(":$primaryKey", $this->{$primaryKey});
+
             $statement->execute();
 
             if ($statement->rowCount() > 0) {
@@ -97,22 +114,38 @@ abstract class DbModel extends Model
             if (method_exists($this, 'validate') && !$this->validate()) {
                 return false;
             }
-            $params = array_map(fn($attr) => ":$attr", $attributes);
-            $sql = "INSERT INTO $tableName (" . implode(", ", $attributes) . ") 
-                VALUES (" . implode(", ", $params) . ")";
-            $statement = static::prepare($sql);
+
+            $columns = [];
+            $placeholders = [];
+            $params = [];
+            $replacements = [];
 
             foreach ($attributes as $attribute) {
-                $statement->bindValue(":$attribute", $this->{$attribute});
+                $columns[] = $attribute;
+                $placeholder = ":$attribute";
+                $value = $this->{$attribute};
+
+                if ($value instanceof \sigawa\mvccore\db\RawSQL) {
+                    $placeholders[] = (string)$value;
+                } else {
+                    $placeholders[] = $placeholder;
+                    $params[$placeholder] = $value;
+                }
             }
+
+            $sql = "INSERT INTO $tableName (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
+            $statement = static::prepare($sql);
+
+            foreach ($params as $key => $value) {
+                $statement->bindValue($key, $value);
+            }
+
             $statement->execute();
-            // ✅ FIRST: Set the PK before logging or any hook
             $this->{$primaryKey} = Application::$app->db->lastInsertId();
-            $this->isNewRecord = true; // still mark as new
-            // ✅ NOW call hooks (they’ll have access to ID)
+            $this->isNewRecord = true;
             $this->afterSave();
             $this->afterInsert();
-            $this->isNewRecord = false; // finalize
+            $this->isNewRecord = false;
             return true;
         }
     }
@@ -403,16 +436,6 @@ abstract class DbModel extends Model
         ];
     }
 
-    public static function query(string $query, array $params = [])
-    {
-        $statement = self::prepare($query);
-
-        foreach ($params as $key => $value) {
-            $statement->bindValue(":$key", $value);
-        }
-
-        return $statement->execute(); // Execute and return success/failure
-    }
 
     public static function updateOrCreate(array $conditions, array $data)
     {
@@ -485,6 +508,113 @@ abstract class DbModel extends Model
         }
 
         return "WHERE " . implode(" AND ", $clauses);
+    }
+
+    /**
+     * Fluent query builder for flexible SELECT queries.
+     * Usage:
+     *   $query = Product::query();
+     *   $query->where('price', '>=', 100)->where('brand', 'Acme')->all();
+     */
+    public static function query()
+    {
+        return new class(static::class) {
+            private string $modelClass;
+            private string $table;
+            private array $wheres = [];
+            private array $params = [];
+            private ?string $orderBy = null;
+            private ?int $limit = null;
+            private ?int $offset = null;
+            private array $columns = ['*'];
+
+            public function __construct($modelClass)
+            {
+                $this->modelClass = $modelClass;
+                $this->table = $modelClass::tableName();
+            }
+
+            /**
+             * Add a WHERE condition.
+             * Supports: where('col', 'val'), where('col', '>=', 5), where(['col' => val, ...])
+             */
+            public function where($column, $operator = null, $value = null)
+            {
+                if (is_array($column)) {
+                    foreach ($column as $col => $val) {
+                        $param = ':' . $col . count($this->params);
+                        $this->wheres[] = "`$col` = $param";
+                        $this->params[$param] = $val;
+                    }
+                } elseif (func_num_args() === 2) {
+                    $param = ':' . $column . count($this->params);
+                    $this->wheres[] = "`$column` = $param";
+                    $this->params[$param] = $operator;
+                } elseif (func_num_args() === 3) {
+                    $param = ':' . $column . count($this->params);
+                    $this->wheres[] = "`$column` $operator $param";
+                    $this->params[$param] = $value;
+                }
+                return $this;
+            }
+
+            public function orderBy(string $column, string $direction = 'ASC')
+            {
+                $this->orderBy = "`$column` " . (strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC');
+                return $this;
+            }
+
+            public function limit(int $limit)
+            {
+                $this->limit = $limit;
+                return $this;
+            }
+
+            public function offset(int $offset)
+            {
+                $this->offset = $offset;
+                return $this;
+            }
+
+            public function select(array $columns)
+            {
+                $this->columns = $columns;
+                return $this;
+            }
+
+            public function all(): array
+            {
+                $cols = $this->columns === ['*']
+                    ? '*'
+                    : implode(', ', array_map(fn($col) => "`$col`", $this->columns));
+                $sql = "SELECT $cols FROM `{$this->table}`";
+                if ($this->wheres) {
+                    $sql .= " WHERE " . implode(' AND ', $this->wheres);
+                }
+                if ($this->orderBy) {
+                    $sql .= " ORDER BY " . $this->orderBy;
+                }
+                if ($this->limit !== null) {
+                    $sql .= " LIMIT " . intval($this->limit);
+                }
+                if ($this->offset !== null) {
+                    $sql .= " OFFSET " . intval($this->offset);
+                }
+                $stmt = $this->modelClass::prepare($sql);
+                foreach ($this->params as $key => $val) {
+                    $stmt->bindValue($key, $val);
+                }
+                $stmt->execute();
+                return $stmt->fetchAll(\PDO::FETCH_CLASS, $this->modelClass);
+            }
+
+            public function first(): ?object
+            {
+                $this->limit = 1;
+                $results = $this->all();
+                return $results[0] ?? null;
+            }
+        };
     }
     public static function all(array $filters = [], array $columns = ['*'], array $extra = []): array
     {

@@ -521,12 +521,17 @@ abstract class DbModel extends Model
         return new class(static::class) {
             private string $modelClass;
             private string $table;
+            private array $select = ['*'];
             private array $wheres = [];
+            private array $orWheres = [];
+            private array $having = [];
+            private array $joins = [];
+            private array $groupBy = [];
             private array $params = [];
             private ?string $orderBy = null;
             private ?int $limit = null;
             private ?int $offset = null;
-            private array $columns = ['*'];
+            private bool $distinct = false;
 
             public function __construct($modelClass)
             {
@@ -534,27 +539,79 @@ abstract class DbModel extends Model
                 $this->table = $modelClass::tableName();
             }
 
-            /**
-             * Add a WHERE condition.
-             * Supports: where('col', 'val'), where('col', '>=', 5), where(['col' => val, ...])
-             */
+            public function select(array $columns)
+            {
+                $this->select = $columns;
+                return $this;
+            }
+
+            public function rawSelect(string $expression)
+            {
+                $this->select = [$expression]; // can also merge with others
+                return $this;
+            }
+
+            public function distinct()
+            {
+                $this->distinct = true;
+                return $this;
+            }
+
             public function where($column, $operator = null, $value = null)
             {
+                return $this->addCondition('AND', $column, $operator, $value);
+            }
+
+            public function orWhere($column, $operator = null, $value = null)
+            {
+                return $this->addCondition('OR', $column, $operator, $value);
+            }
+
+            private function addCondition(string $type, $column, $operator = null, $value = null)
+            {
+                $target = $type === 'AND' ? 'wheres' : 'orWheres';
+
                 if (is_array($column)) {
                     foreach ($column as $col => $val) {
                         $param = ':' . $col . count($this->params);
-                        $this->wheres[] = "`$col` = $param";
+                        $this->{$target}[] = "`$col` = $param";
                         $this->params[$param] = $val;
                     }
                 } elseif (func_num_args() === 2) {
                     $param = ':' . $column . count($this->params);
-                    $this->wheres[] = "`$column` = $param";
+                    $this->{$target}[] = "`$column` = $param";
                     $this->params[$param] = $operator;
                 } elseif (func_num_args() === 3) {
                     $param = ':' . $column . count($this->params);
-                    $this->wheres[] = "`$column` $operator $param";
+                    $this->{$target}[] = "`$column` $operator $param";
                     $this->params[$param] = $value;
                 }
+
+                return $this;
+            }
+
+            public function join(string $table, string $first, string $operator, string $second)
+            {
+                $this->joins[] = "JOIN `$table` ON `$first` $operator `$second`";
+                return $this;
+            }
+
+            public function groupBy(string ...$columns)
+            {
+                $this->groupBy = $columns;
+                return $this;
+            }
+
+            public function having(string $condition, $paramName = null, $value = null)
+            {
+                if ($paramName && $value !== null) {
+                    $placeholder = ':' . $paramName . count($this->params);
+                    $this->having[] = "$condition $placeholder";
+                    $this->params[$placeholder] = $value;
+                } else {
+                    $this->having[] = $condition;
+                }
+
                 return $this;
             }
 
@@ -576,30 +633,57 @@ abstract class DbModel extends Model
                 return $this;
             }
 
-            public function select(array $columns)
+            public function toSql(): string
             {
-                $this->columns = $columns;
-                return $this;
+                $cols = implode(', ', $this->select);
+                $sql = 'SELECT ';
+                if ($this->distinct) $sql .= 'DISTINCT ';
+                $sql .= $cols . " FROM `{$this->table}`";
+
+                if (!empty($this->joins)) {
+                    $sql .= ' ' . implode(' ', $this->joins);
+                }
+
+                $conditions = [];
+
+                if ($this->wheres) {
+                    $conditions[] = implode(' AND ', $this->wheres);
+                }
+
+                if ($this->orWheres) {
+                    $conditions[] = '(' . implode(' OR ', $this->orWheres) . ')';
+                }
+
+                if ($conditions) {
+                    $sql .= ' WHERE ' . implode(' AND ', $conditions);
+                }
+
+                if ($this->groupBy) {
+                    $sql .= ' GROUP BY ' . implode(', ', array_map(fn($col) => "`$col`", $this->groupBy));
+                }
+
+                if (!empty($this->having)) {
+                    $sql .= ' HAVING ' . implode(' AND ', $this->having);
+                }
+
+                if ($this->orderBy) {
+                    $sql .= " ORDER BY " . $this->orderBy;
+                }
+
+                if ($this->limit !== null) {
+                    $sql .= " LIMIT " . intval($this->limit);
+                }
+
+                if ($this->offset !== null) {
+                    $sql .= " OFFSET " . intval($this->offset);
+                }
+
+                return $sql;
             }
 
             public function all(): array
             {
-                $cols = $this->columns === ['*']
-                    ? '*'
-                    : implode(', ', array_map(fn($col) => "`$col`", $this->columns));
-                $sql = "SELECT $cols FROM `{$this->table}`";
-                if ($this->wheres) {
-                    $sql .= " WHERE " . implode(' AND ', $this->wheres);
-                }
-                if ($this->orderBy) {
-                    $sql .= " ORDER BY " . $this->orderBy;
-                }
-                if ($this->limit !== null) {
-                    $sql .= " LIMIT " . intval($this->limit);
-                }
-                if ($this->offset !== null) {
-                    $sql .= " OFFSET " . intval($this->offset);
-                }
+                $sql = $this->toSql();
                 $stmt = $this->modelClass::prepare($sql);
                 foreach ($this->params as $key => $val) {
                     $stmt->bindValue($key, $val);
@@ -614,28 +698,81 @@ abstract class DbModel extends Model
                 $results = $this->all();
                 return $results[0] ?? null;
             }
+
+            public function sum(string $column): float
+            {
+                $this->select = ["SUM(`$column`) AS total"];
+                $result = $this->first();
+                return (float) ($result->total ?? 0);
+            }
+
+            public function count(string $column = '*'): int
+            {
+                $this->select = ["COUNT($column) AS total"];
+                $result = $this->first();
+                return (int) ($result->total ?? 0);
+            }
+
+            public function avg(string $column): float
+            {
+                $this->select = ["AVG(`$column`) AS average"];
+                $result = $this->first();
+                return (float) ($result->average ?? 0);
+            }
+
+            public function max(string $column)
+            {
+                $this->select = ["MAX(`$column`) AS max_val"];
+                $result = $this->first();
+                return $result->max_val ?? null;
+            }
+
+            public function min(string $column)
+            {
+                $this->select = ["MIN(`$column`) AS min_val"];
+                $result = $this->first();
+                return $result->min_val ?? null;
+            }
         };
     }
-    public static function all(array $filters = [], array $columns = ['*'], array $extra = []): array
-    {
+    public static function all(
+        array $filters = [],
+        array $columns = ['*'],
+        array $extra = [],
+        array $rawConditions = [],
+        array $bindings = []
+    ): array {
         $tableName = static::tableName();
-        $columnSelections = $columns === ['*'] ? '*' : implode(", ", array_map(fn($col) => "`$col`", $columns));
+        $columnSelections = $columns === ['*']
+            ? '*'
+            : implode(", ", array_map(fn($col) => "`$col`", $columns));
+
         $sql = "SELECT $columnSelections FROM `$tableName`";
 
-        // Add filters
-        if (!empty($filters)) {
-            $conditions = [];
-            foreach ($filters as $key => $value) {
-                $conditions[] = "`$key` = :$key";
-            }
-            $sql .= " WHERE " . implode(" AND ", $conditions);
+        $whereParts = [];
+
+        // Add key-value filters
+        foreach ($filters as $key => $value) {
+            $param = ":" . str_replace('.', '_', $key); // for table.column
+            $whereParts[] = "`$key` = $param";
+            $bindings[$param] = $value;
         }
 
-        // Handle extras
+        // Add raw conditions like "latitude IS NOT NULL"
+        foreach ($rawConditions as $condition) {
+            $whereParts[] = $condition;
+        }
+
+        if (!empty($whereParts)) {
+            $sql .= " WHERE " . implode(" AND ", $whereParts);
+        }
+
+        // GROUP BY
         if (!empty($extra['groupBy'])) {
             $sql .= " GROUP BY " . $extra['groupBy'];
         }
 
+        // ORDER BY
         if (!empty($extra['orderBy'])) {
             $orderClauses = [];
             foreach ($extra['orderBy'] as $col => $dir) {
@@ -644,6 +781,7 @@ abstract class DbModel extends Model
             $sql .= " ORDER BY " . implode(", ", $orderClauses);
         }
 
+        // LIMIT & OFFSET
         if (!empty($extra['limit'])) {
             $sql .= " LIMIT " . intval($extra['limit']);
         }
@@ -654,13 +792,15 @@ abstract class DbModel extends Model
 
         $statement = self::prepare($sql);
 
-        foreach ($filters as $key => $value) {
-            $statement->bindValue(":$key", $value);
+        // Bind all parameters
+        foreach ($bindings as $key => $value) {
+            $statement->bindValue($key, $value);
         }
 
         $statement->execute();
         return $statement->fetchAll(\PDO::FETCH_ASSOC);
     }
+
     /**
      * Fluent query builder for SELECT statements.
      * Usage:

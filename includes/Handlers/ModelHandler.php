@@ -9,10 +9,8 @@ class ModelHandler
     public static function handle(string $name): void
     {
         ['className' => $class, 'subDir' => $sub] = Cli::pathify($name);
-         $baseDir = getcwd(); 
         $namespace = Cli::loadComposerNamespace() . 'models' . ($sub ? '\\' . str_replace('/', '\\', $sub) : '');
-        $targetPath = $baseDir . "/models" . ($sub ? "/$sub" : "");
-        // $targetPath = "models" . ($sub ? "/$sub" : "");
+        $targetPath = "models" . ($sub ? "/$sub" : "");
         $filename = "$targetPath/{$class}.php";
 
         $stub = <<<PHP

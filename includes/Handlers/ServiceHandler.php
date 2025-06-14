@@ -9,10 +9,8 @@ class ServiceHandler
     public static function handle(string $name): void
     {
         ['className' => $class, 'subDir' => $sub] = Cli::pathify($name);
-        $baseDir = getcwd();
         $namespace = rtrim(Cli::loadComposerNamespace(), '\\') . '\\services' . ($sub ? '\\' . str_replace('/', '\\', $sub) : '');
-        // $targetPath = "services" . ($sub ? "/$sub" : "");
-        $targetPath = $baseDir . "/services" . ($sub ? "/$sub" : "");
+        $targetPath = "services" . ($sub ? "/$sub" : "");
         $filename = "$targetPath/{$class}Service.php";
         $stub = <<<PHP
 <?php

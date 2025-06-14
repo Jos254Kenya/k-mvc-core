@@ -113,7 +113,7 @@ class AuthMiddleware extends BaseMiddleware
         if ($this->isApi) {
                 return $response->json([
                 'error' => "Invalid or missing authentication token..",
-            ]);
+            ],403);
         }
 
         if ($this->redirectUrl) {
@@ -122,6 +122,6 @@ class AuthMiddleware extends BaseMiddleware
         }
         return $response->json([
             'error' => "You must be logged in to access this resource.",
-        ]);
+        ],403);
     }
 }

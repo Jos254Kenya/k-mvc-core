@@ -9,8 +9,10 @@ class ControllerHandler
     public static function handle(string $name, array $options): void
     {
         ['className' => $class, 'subDir' => $sub] = Cli::pathify($name);
+        $baseDir = getcwd(); // <-- The user's current project directory
         $namespace = Cli::loadComposerNamespace() . 'controllers' . ($sub ? '\\' . str_replace('/', '\\', $sub) : '');
-        $targetPath = "controllers" . ($sub ? "/$sub" : "");
+        // $targetPath = "controllers" . ($sub ? "/$sub" : "");
+        $targetPath = $baseDir . "/controllers" . ($sub ? "/$sub" : "");
         $filename = "$targetPath/{$class}Controller.php";
 
         $methods = $options['resource'] ?? false

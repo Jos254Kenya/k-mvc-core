@@ -3,15 +3,15 @@
 
 namespace McConsole;
 
-// Define base path for global access
+// Set BASE_PATH to the current working directory (user's project root)
 if (!defined('BASE_PATH')) {
-    define('BASE_PATH', dirname(__DIR__));
+    define('BASE_PATH', getcwd());
 }
 
-// PSR-4 Autoloader for McConsole internal namespaces
+// Register autoloader for McConsole internal classes
 spl_autoload_register(function ($class) {
     $prefix = 'McConsole\\';
-    $base_dir = BASE_PATH . '/includes/';
+    $base_dir = __DIR__ . '/';  // Use __DIR__ for internal McConsole code
 
     $len = strlen($prefix);
     if (strncmp($prefix, $class, $len) !== 0) {

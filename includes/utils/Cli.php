@@ -69,13 +69,17 @@ class Cli
         $composer = json_decode(file_get_contents($composerFile), true);
         return key($composer['autoload']['psr-4'] ?? []);
     }
-    public static function writeFile(string $relativePath, string $content): void
-    {
-        $fullPath = BASE_PATH . '/' . $relativePath;
-        $dir = dirname($fullPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        file_put_contents($fullPath, $content);
+   public static function writeFile(string $relativePath, string $content): void
+{
+    // If $relativePath is already absolute, use it directly
+    $fullPath = preg_match('/^[A-Z]:\\\\|^\//i', $relativePath) ? $relativePath : BASE_PATH . '/' . $relativePath;
+
+    $dir = dirname($fullPath);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
     }
+
+    file_put_contents($fullPath, $content);
+}
+
 }

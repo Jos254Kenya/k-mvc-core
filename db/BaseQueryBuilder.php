@@ -44,6 +44,18 @@ class BaseQueryBuilder
         return $this;
     }
 
+    public function filterByArray(array $filters): self
+    {
+        foreach ($filters as $col => $val) {
+            if (is_array($val)) {
+                $this->where($col, $val[0], $val[1]); // e.g. ['>=', 50]
+            } else {
+                $this->where($col, '=', $val);
+            }
+        }
+        return $this;
+    }
+
     public function join(string $tableWithAlias, string $left, string $operator, string $right): self
     {
         $this->joins[] = "JOIN {$tableWithAlias} ON {$left} {$operator} {$right}";
@@ -160,6 +172,20 @@ class BaseQueryBuilder
     {
         return $this->where ? ' WHERE ' . implode(' AND ', $this->where) : '';
     }
+    protected array $whereConditions = [];
+
+    public function startGroup(): self
+    {
+        $this->whereConditions[] = '(';
+        return $this;
+    }
+
+    public function endGroup(): self
+    {
+        $this->whereConditions[] = ')';
+        return $this;
+    }
+
     public function orWhereGroup(array $conditions): static
     {
         $group = [];
@@ -171,6 +197,22 @@ class BaseQueryBuilder
         $this->where[] = ['GROUP', $group];
         return $this;
     }
+    public function cloneWithoutLimitOffset(): self
+    {
+        $new = clone $this;
+        $new->limit = null;
+        $new->offset = null;
+        return $new;
+    }
+
+    public function whereGroup(callable $callback): self
+    {
+        $this->startGroup();          // Push "("
+        $callback($this);            // Let the user add `orWhere()` or `where()`s
+        $this->endGroup();           // Push ")"
+        return $this;
+    }
+
     protected function prefixColumn(string $column): string
     {
         if (strpos($column, '.') !== false || strpos($column, '(') !== false) {

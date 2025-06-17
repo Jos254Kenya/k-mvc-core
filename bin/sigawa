@@ -38,7 +38,15 @@ switch ($command) {
         break;
 
     case 'serve':
-        chdir(__DIR__ . '/public');
+        $cwd = getcwd(); // Get the directory from which the command is being run
+        $publicDir = $cwd . '/public';
+
+        if (!is_dir($publicDir)) {
+            echo "❌ Public directory not found at: $publicDir\n";
+            break;
+        }
+
+        chdir($publicDir);
         echo "🌐 Server started at http://localhost:8000\n";
         passthru("php -S localhost:8000");
         break;

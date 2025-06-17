@@ -68,8 +68,8 @@ class Application
         }
     }
 
-    
-  
+
+
 
     public function guestLogin(UserModel $user)
     {
@@ -122,29 +122,27 @@ class Application
         $request = $this->request;
         $response = $this->response;
 
-        // Check if the request is an API request
+        // Determine if the request is an API request
         $isApiRequest = str_starts_with($request->getUrl(), '/api');
-        // Determine HTTP status code
-        $statusCode = method_exists($e, 'getCode') && $e->getCode() ? $e->getCode() : 500;
+
+        // Normalize status code (avoid non-integer like SQLSTATE '42S22')
+        $rawCode = $e->getCode();
+        $statusCode = is_numeric($rawCode) && (int)$rawCode >= 100 && (int)$rawCode <= 599
+            ? (int)$rawCode
+            : 500;
+
         $response->statusCode($statusCode);
 
         if ($isApiRequest) {
-            // Return JSON error response for API requests
+            // Return JSON error response
             return $response->json([
                 'error' => $e->getMessage(),
                 'status' => $statusCode
             ], $statusCode);
         }
-
         // For web requests, render an error page
-        if (getenv('APP_DEBUG') === 'true') {
-            echo $this->view->renderView('_error', ['exception' => $e]);
-        } else {
-            $response->statusCode(500);
-            echo $this->view->renderView('_error', ['exception' => $e]);
-        }
+        echo $this->view->renderView('_error', ['exception' => $e]);
     }
-
 
     public function triggerEvent($eventName)
     {

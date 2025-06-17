@@ -26,6 +26,16 @@ class Cache
             self::$useCompression = (bool)$options['useCompression'];
         }
     }
+    public static function remember(string $key, int $ttl, callable $callback, string $namespace = '', array $tags = [])
+    {
+        if (self::has($key, $namespace)) {
+            return self::get($key, $namespace);
+        }
+
+        $value = $callback();
+        self::set($key, $value, $ttl, $namespace, $tags);
+        return $value;
+    }
 
     protected static function getCacheFile(string $key, string $namespace = ''): string
     {

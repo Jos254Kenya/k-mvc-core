@@ -518,223 +518,9 @@ abstract class DbModel extends Model
      */
     public static function query()
     {
-        return new class(static::class) {
-            private string $modelClass;
-            private string $table;
-            private array $select = ['*'];
-            private array $wheres = [];
-            private array $orWheres = [];
-            private array $having = [];
-            private array $joins = [];
-            private array $groupBy = [];
-            private array $params = [];
-            private ?string $orderBy = null;
-            private ?int $limit = null;
-            private ?int $offset = null;
-            private bool $distinct = false;
-
-            public function __construct($modelClass)
-            {
-                $this->modelClass = $modelClass;
-                $this->table = $modelClass::tableName();
-            }
-
-            public function select(array $columns)
-            {
-                $this->select = $columns;
-                return $this;
-            }
-
-            public function rawSelect(string $expression)
-            {
-                $this->select = [$expression]; // can also merge with others
-                return $this;
-            }
-
-            public function distinct()
-            {
-                $this->distinct = true;
-                return $this;
-            }
-
-            public function where($column, $operator = null, $value = null)
-            {
-                return $this->addCondition('AND', $column, $operator, $value);
-            }
-
-            public function orWhere($column, $operator = null, $value = null)
-            {
-                return $this->addCondition('OR', $column, $operator, $value);
-            }
-
-            private function addCondition(string $type, $column, $operator = null, $value = null)
-            {
-                $target = $type === 'AND' ? 'wheres' : 'orWheres';
-
-                if (is_array($column)) {
-                    foreach ($column as $col => $val) {
-                        $param = ':' . $col . count($this->params);
-                        $this->{$target}[] = "`$col` = $param";
-                        $this->params[$param] = $val;
-                    }
-                } elseif (func_num_args() === 2) {
-                    $param = ':' . $column . count($this->params);
-                    $this->{$target}[] = "`$column` = $param";
-                    $this->params[$param] = $operator;
-                } elseif (func_num_args() === 3) {
-                    $param = ':' . $column . count($this->params);
-                    $this->{$target}[] = "`$column` $operator $param";
-                    $this->params[$param] = $value;
-                }
-
-                return $this;
-            }
-
-            public function join(string $table, string $first, string $operator, string $second)
-            {
-                $this->joins[] = "JOIN `$table` ON `$first` $operator `$second`";
-                return $this;
-            }
-
-            public function groupBy(string ...$columns)
-            {
-                $this->groupBy = $columns;
-                return $this;
-            }
-
-            public function having(string $condition, $paramName = null, $value = null)
-            {
-                if ($paramName && $value !== null) {
-                    $placeholder = ':' . $paramName . count($this->params);
-                    $this->having[] = "$condition $placeholder";
-                    $this->params[$placeholder] = $value;
-                } else {
-                    $this->having[] = $condition;
-                }
-
-                return $this;
-            }
-
-            public function orderBy(string $column, string $direction = 'ASC')
-            {
-                $this->orderBy = "`$column` " . (strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC');
-                return $this;
-            }
-
-            public function limit(int $limit)
-            {
-                $this->limit = $limit;
-                return $this;
-            }
-
-            public function offset(int $offset)
-            {
-                $this->offset = $offset;
-                return $this;
-            }
-
-            public function toSql(): string
-            {
-                $cols = implode(', ', $this->select);
-                $sql = 'SELECT ';
-                if ($this->distinct) $sql .= 'DISTINCT ';
-                $sql .= $cols . " FROM `{$this->table}`";
-
-                if (!empty($this->joins)) {
-                    $sql .= ' ' . implode(' ', $this->joins);
-                }
-
-                $conditions = [];
-
-                if ($this->wheres) {
-                    $conditions[] = implode(' AND ', $this->wheres);
-                }
-
-                if ($this->orWheres) {
-                    $conditions[] = '(' . implode(' OR ', $this->orWheres) . ')';
-                }
-
-                if ($conditions) {
-                    $sql .= ' WHERE ' . implode(' AND ', $conditions);
-                }
-
-                if ($this->groupBy) {
-                    $sql .= ' GROUP BY ' . implode(', ', array_map(fn($col) => "`$col`", $this->groupBy));
-                }
-
-                if (!empty($this->having)) {
-                    $sql .= ' HAVING ' . implode(' AND ', $this->having);
-                }
-
-                if ($this->orderBy) {
-                    $sql .= " ORDER BY " . $this->orderBy;
-                }
-
-                if ($this->limit !== null) {
-                    $sql .= " LIMIT " . intval($this->limit);
-                }
-
-                if ($this->offset !== null) {
-                    $sql .= " OFFSET " . intval($this->offset);
-                }
-
-                return $sql;
-            }
-
-            public function all(): array
-            {
-                $sql = $this->toSql();
-                $stmt = $this->modelClass::prepare($sql);
-                foreach ($this->params as $key => $val) {
-                    $stmt->bindValue($key, $val);
-                }
-                $stmt->execute();
-                return $stmt->fetchAll(\PDO::FETCH_CLASS, $this->modelClass);
-            }
-
-            public function first(): ?object
-            {
-                $this->limit = 1;
-                $results = $this->all();
-                return $results[0] ?? null;
-            }
-
-            public function sum(string $column): float
-            {
-                $this->select = ["SUM(`$column`) AS total"];
-                $result = $this->first();
-                return (float) ($result->total ?? 0);
-            }
-
-            public function count(string $column = '*'): int
-            {
-                $this->select = ["COUNT($column) AS total"];
-                $result = $this->first();
-                return (int) ($result->total ?? 0);
-            }
-
-            public function avg(string $column): float
-            {
-                $this->select = ["AVG(`$column`) AS average"];
-                $result = $this->first();
-                return (float) ($result->average ?? 0);
-            }
-
-            public function max(string $column)
-            {
-                $this->select = ["MAX(`$column`) AS max_val"];
-                $result = $this->first();
-                return $result->max_val ?? null;
-            }
-
-            public function min(string $column)
-            {
-                $this->select = ["MIN(`$column`) AS min_val"];
-                $result = $this->first();
-                return $result->min_val ?? null;
-            }
-        };
+        return new BaseQueryBuilder(static::class);
     }
+
     public static function all(
         array $filters = [],
         array $columns = ['*'],
@@ -801,11 +587,24 @@ abstract class DbModel extends Model
         return $statement->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    public static function hydrate(array $data): static
+    {
+        $instance = new static();
+        $fillable = $instance->attributes();
+        foreach ($data as $key => $value) {
+            if (in_array($key, $fillable)) {
+                $instance->$key = $value;
+            }
+        }
+        return $instance;
+    }
+
     /**
      * Fluent query builder for SELECT statements.
      * Usage:
      *   VendorProduct::select(['col1', 'col2'])->where(['id' => 1])->all();
      */
+
     public static function select(array $columns = ['*'])
     {
         return new class(static::tableName(), $columns, static::class) {
@@ -824,28 +623,53 @@ abstract class DbModel extends Model
                 $this->columns = $columns;
                 $this->modelClass = $modelClass;
             }
+            private array $joins = [];
 
-            /**
-             * Supports both raw SQL and structured array conditions.
-             *
-             * Examples:
-             * - where(['vendor_id' => 5])
-             * - where('stock_quantity < :threshold', ['threshold' => 10])
-             */
+            public function join(string $table, string $on, string $type = 'INNER')
+            {
+                $this->joins[] = strtoupper($type) . " JOIN `$table` ON $on";
+                return $this;
+            }
             public function where(string|array $conditions, array $params = [])
             {
+                return $this->addCondition('AND', $conditions, $params);
+            }
+
+            public function andWhere(string|array $conditions, array $params = [])
+            {
+                return $this->addCondition('AND', $conditions, $params);
+            }
+
+            public function orWhere(string|array $conditions, array $params = [])
+            {
+                return $this->addCondition('OR', $conditions, $params);
+            }
+
+            private function addCondition(string $type, string|array $conditions, array $params): self
+            {
+                $clause = '';
+
                 if (is_array($conditions)) {
+                    $clauses = [];
                     foreach ($conditions as $key => $value) {
-                        $placeholder = ":$key";
-                        $this->where[] = "`$key` = $placeholder";
+                        $placeholder = ":{$key}_" . count($this->params);
+                        $clauses[] = "`$key` = $placeholder";
                         $this->params[$placeholder] = $value;
                     }
+                    $clause = implode(" $type ", $clauses);
                 } else {
-                    $this->where[] = $conditions;
+                    $clause = $conditions;
                     foreach ($params as $key => $value) {
                         $this->params[":$key"] = $value;
                     }
                 }
+
+                if (!empty($this->where)) {
+                    $this->where[] = $type . ' ' . $clause;
+                } else {
+                    $this->where[] = $clause;
+                }
+
                 return $this;
             }
 
@@ -867,12 +691,16 @@ abstract class DbModel extends Model
                 return $this;
             }
 
-            public function all(): array
+            public function all(bool $asArray = false): array
             {
-                $sql = "SELECT " . implode(', ', array_map(fn($col) => "`$col`", $this->columns)) . " FROM `{$this->table}`";
+                $sql = "SELECT " . implode(', ', array_map(fn($col) => "`$col`", $this->columns))
+                    . " FROM `{$this->table}`";
+                if (!empty($this->joins)) {
+                    $sql .= ' ' . implode(' ', $this->joins);
+                }
 
                 if (!empty($this->where)) {
-                    $sql .= " WHERE " . implode(" AND ", $this->where);
+                    $sql .= " WHERE " . implode(" ", $this->where);
                 }
 
                 if ($this->orderBy) {
@@ -893,19 +721,185 @@ abstract class DbModel extends Model
                 }
 
                 $stmt->execute();
-                return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+                $results = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+                if ($asArray) {
+                    return $results;
+                }
+
+                return array_map(fn($row) => $this->modelClass::hydrate($row), $results);
             }
 
-            public function first(): ?object
+            public function first(bool $asArray = false): ?object
             {
                 $this->limit = 1;
-                $results = $this->all();
+                $results = $this->all($asArray);
                 return $results[0] ?? null;
             }
         };
     }
 
-    public static function find($id): ?self
+
+    /**
+     * Starts a fluent query builder for the model.
+     * Usage:
+     *   FacilityStock::find()->where([...])->joinWith([...])->all();
+     */
+    public static function find(): object
+    {
+        $modelClass = static::class;
+        return new class($modelClass) {
+            private string $modelClass;
+            private string $table;
+            private array $select = ['*'];
+            private array $joins = [];
+            private array $where = [];
+            private array $params = [];
+            private array $orderBy = [];
+            private ?int $limit = null;
+            private ?int $offset = null;
+
+            public function __construct($modelClass)
+            {
+                $this->modelClass = $modelClass;
+                $this->table = $modelClass::tableName();
+            }
+
+            public function select(array $columns)
+            {
+                $this->select = $columns;
+                return $this;
+            }
+
+            /**
+             * Accepts joinWith(['relationName', ...]) or joinWith('relationName')
+             */
+            public function joinWith(array|string $relations)
+            {
+                $relations = (array)$relations;
+                foreach ($relations as $relation) {
+                    // Get relation definition from model
+                    $instance = new $this->modelClass();
+                    $relationsDef = method_exists($instance, 'relations') ? $instance->relations() : [];
+                    if (!isset($relationsDef[$relation])) {
+                        throw new \Exception("Relation '$relation' not defined in {$this->modelClass}");
+                    }
+                    [$type, $relatedClass, $foreignKey, $localKey] = $relationsDef[$relation];
+                    $relatedTable = $relatedClass::tableName();
+                    $alias = $relation;
+
+                    // Only support HAS_ONE/BELONGS_TO/HAS_MANY for now
+                    $this->joins[] = [
+                        'table' => $relatedTable,
+                        'alias' => $alias,
+                        'on' => "`{$this->table}`.`$localKey` = `$alias`.`$foreignKey`"
+                    ];
+                }
+                return $this;
+            }
+
+            public function where(array $conditions)
+            {
+                foreach ($conditions as $key => $value) {
+                    $param = ':' . str_replace('.', '_', $key) . count($this->params);
+                    if (strpos($key, '.') !== false) {
+                        [$alias, $col] = explode('.', $key, 2);
+                        $this->where[] = "`$alias`.`$col` = $param";
+                    } else {
+                        $this->where[] = "`{$this->table}`.`$key` = $param";
+                    }
+                    $this->params[$param] = $value;
+                }
+                return $this;
+            }
+
+            public function andWhere(array $conditions)
+            {
+                return $this->where($conditions);
+            }
+
+            public function orderBy(array $columns)
+            {
+                foreach ($columns as $key => $dir) {
+                    $direction = (is_string($dir) && strtoupper($dir) === 'DESC') || $dir === SORT_DESC ? 'DESC' : 'ASC';
+                    if (strpos($key, '.') !== false) {
+                        [$alias, $col] = explode('.', $key, 2);
+                        $this->orderBy[] = "`$alias`.`$col` $direction";
+                    } else {
+                        $this->orderBy[] = "`{$this->table}`.`$key` $direction";
+                    }
+                }
+                return $this;
+            }
+
+            public function limit(int $limit)
+            {
+                $this->limit = $limit;
+                return $this;
+            }
+
+            public function offset(int $offset)
+            {
+                $this->offset = $offset;
+                return $this;
+            }
+
+            public function all(): array
+            {
+                $sql = $this->buildSql();
+                $stmt = $this->modelClass::prepare($sql);
+                foreach ($this->params as $key => $val) {
+                    $stmt->bindValue($key, $val);
+                }
+                $stmt->execute();
+                return $stmt->fetchAll(\PDO::FETCH_CLASS, $this->modelClass);
+            }
+
+            public function one(): ?object
+            {
+                $this->limit = 1;
+                $results = $this->all();
+                return $results[0] ?? null;
+            }
+
+            private function buildSql(): string
+            {
+                $select = $this->select === ['*']
+                    ? "{$this->table}.*"
+                    : implode(', ', array_map(function ($col) {
+                        if (strpos($col, '.') !== false) {
+                            [$alias, $c] = explode('.', $col, 2);
+                            return "`$alias`.`$c`";
+                        }
+                        return "`{$this->table}`.`$col`";
+                    }, $this->select));
+
+                $sql = "SELECT $select FROM `{$this->table}`";
+
+                foreach ($this->joins as $join) {
+                    $sql .= " LEFT JOIN `{$join['table']}` AS `{$join['alias']}` ON {$join['on']}";
+                }
+
+                if ($this->where) {
+                    $sql .= " WHERE " . implode(' AND ', $this->where);
+                }
+
+                if ($this->orderBy) {
+                    $sql .= " ORDER BY " . implode(', ', $this->orderBy);
+                }
+
+                if ($this->limit !== null) {
+                    $sql .= " LIMIT " . intval($this->limit);
+                }
+                if ($this->offset !== null) {
+                    $sql .= " OFFSET " . intval($this->offset);
+                }
+
+                return $sql;
+            }
+        };
+    }
+    public static function findbyId($id): ?self
     {
         $tableName = static::tableName();
         $primaryKey = static::primaryKey();

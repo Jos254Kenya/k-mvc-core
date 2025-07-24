@@ -43,7 +43,12 @@ class ComposerStaticInitd44030726167ce941e8dfbd89fc9138a
             'Psr\\Clock\\' => 10,
             'Predis\\' => 7,
             'PhpOption\\' => 10,
+            'ParagonIE\\ConstantTime\\' => 23,
             'PHPMailer\\PHPMailer\\' => 20,
+        ),
+        'O' => 
+        array (
+            'OTPHP\\' => 6,
         ),
         'M' => 
         array (
@@ -144,9 +149,17 @@ class ComposerStaticInitd44030726167ce941e8dfbd89fc9138a
         array (
             0 => __DIR__ . '/..' . '/phpoption/phpoption/src/PhpOption',
         ),
+        'ParagonIE\\ConstantTime\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/paragonie/constant_time_encoding/src',
+        ),
         'PHPMailer\\PHPMailer\\' => 
         array (
             0 => __DIR__ . '/..' . '/phpmailer/phpmailer/src',
+        ),
+        'OTPHP\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/spomky-labs/otphp/src',
         ),
         'Minishlink\\WebPush\\' => 
         array (

@@ -12,7 +12,8 @@
         "predis/predis": "^3.0@alpha",
         "minishlink/web-push": "^9.0",
         "tecnickcom/tcpdf": "^6.10",
-        "endroid/qr-code": "^6.0"
+        "endroid/qr-code": "^6.0",
+        "spomky-labs/otphp": "^11.3"
     },
     "autoload": {
         "psr-4": {

@@ -652,10 +652,12 @@ abstract class DbModel extends Model
                 if (is_array($conditions)) {
                     $clauses = [];
                     foreach ($conditions as $key => $value) {
-                        $placeholder = ":{$key}_" . count($this->params);
+                        $paramKey = str_replace('.', '_', $key);
+                        $placeholder = ":{$paramKey}_" . count($this->params);
                         $clauses[] = "`$key` = $placeholder";
                         $this->params[$placeholder] = $value;
                     }
+
                     $clause = implode(" $type ", $clauses);
                 } else {
                     $clause = $conditions;
@@ -693,8 +695,10 @@ abstract class DbModel extends Model
 
             public function all(bool $asArray = false): array
             {
-                $sql = "SELECT " . implode(', ', array_map(fn($col) => "`$col`", $this->columns))
-                    . " FROM `{$this->table}`";
+                $sql = "SELECT " . implode(', ', array_map(function ($col) {
+                    return preg_match('/[^\w.]/', $col) ? $col : "`$col`";
+                }, $this->columns));
+
                 if (!empty($this->joins)) {
                     $sql .= ' ' . implode(' ', $this->joins);
                 }

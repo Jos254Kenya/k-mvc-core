@@ -129,7 +129,11 @@ class BaseQueryBuilder
         $results = $this->all();
         return $results[0] ?? null;
     }
-
+    public function joinRaw(string $type, string $tableWithAlias, string $onClause): self
+    {
+        $this->joins[] = strtoupper($type) . " JOIN {$tableWithAlias} ON {$onClause}";
+        return $this;
+    }
     public function toSql(): string
     {
         $sql = 'SELECT ' . ($this->select ? implode(', ', $this->select) : '*');
@@ -185,7 +189,18 @@ class BaseQueryBuilder
         $this->whereConditions[] = ')';
         return $this;
     }
-
+    public function andWhere(array $condition): self
+    {
+        [$column, $operator, $value] = $condition;
+        $param = ':param' . count($this->bindings);
+        if (strtoupper($operator) === 'IS' && strtoupper($value) === 'NULL') {
+            $this->where[] = "{$column} IS NULL";
+        } else {
+            $this->bindings[$param] = $value;
+            $this->where[] = "{$column} {$operator} {$param}";
+        }
+        return $this;
+    }
     public function orWhereGroup(array $conditions): static
     {
         $group = [];

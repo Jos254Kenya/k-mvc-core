@@ -49,7 +49,7 @@ class Model
     const RULE_BELONGS_TO = 'belongs_to';
     const RULE_BELONGS_TO_MANY = 'belongs_to_many';
     const RULE_PASSWORD = 'Passw0rd#';
-     public function beforeValidate(): void { }
+    public function beforeValidate(): void {}
     /**
      * Fetch related model(s) for HAS_ONE, HAS_MANY, BELONGS_TO, BELONGS_TO_MANY.
      *
@@ -277,10 +277,15 @@ class Model
                 if ($ruleName === self::RULE_FLOAT && !filter_var($value, FILTER_VALIDATE_FLOAT)) {
                     $this->addErrorByRule($attribute, self::RULE_FLOAT);
                 }
-                // RULE IN
-                if ($ruleName === self::RULE_IN && !in_array($value, $rule['range'], true)) {
+                if (
+                    $ruleName === self::RULE_IN &&
+                    is_array($rule) &&
+                    isset($rule['range']) &&
+                    !in_array($value, $rule['range'], true)
+                ) {
                     $this->addErrorByRule($attribute, self::RULE_IN, ['range' => implode(', ', $rule['range'])]);
                 }
+
                 // Boolean validation
                 if ($ruleName === self::RULE_BOOLEAN && !is_bool(filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE))) {
                     $this->addErrorByRule($attribute, self::RULE_BOOLEAN);

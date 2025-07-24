@@ -8,6 +8,31 @@ class Request
     private ?string $cachedMethod = null;
     private ?string $cachedUrl = null;
 
+    protected array $attributes = [];
+
+    /**
+     * Set a request attribute (e.g., from router, middleware).
+     */
+    public function setAttribute(string $key, mixed $value): void
+    {
+        $this->attributes[$key] = $value;
+    }
+
+    /**
+     * Get an attribute, or return default if not found.
+     */
+    public function getAttribute(string $key, mixed $default = null): mixed
+    {
+        return $this->attributes[$key] ?? $default;
+    }
+
+    /**
+     * Optionally: get all attributes
+     */
+    public function getAttributes(): array
+    {
+        return $this->attributes;
+    }
     public function getMethod(): string
     {
         if ($this->cachedMethod === null) {

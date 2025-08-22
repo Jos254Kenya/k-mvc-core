@@ -15,6 +15,7 @@ abstract class DbModel extends Model
 {
 
     abstract public static function tableName(): string;
+    protected array $originalAttributes = [];
     // 🔁 Hookable Lifecycle Methods
     protected function beforeSave(): void {}
     protected bool $isNewRecord = false;
@@ -25,11 +26,30 @@ abstract class DbModel extends Model
     protected function afterSave(): void
     {
         if (method_exists($this, 'isAuditable') && $this->isAuditable()) {
-            $classBaseName = (new \ReflectionClass($this))->getShortName(); // e.g. 'User'
-            $action = $this->isNewRecord ? "A new $classBaseName created" : "$classBaseName updated";
-            $this->logAction($action);
+            $classBaseName = (new \ReflectionClass($this))->getShortName();
+
+            if ($this->isNewRecord) {
+                $action = "A new $classBaseName created";
+                $changes = $this->attributes(); // all fields are "new"
+            } else {
+                $action = "$classBaseName updated";
+                $changes = [];
+
+                foreach ($this->attributes() as $key => $value) {
+                    $oldValue = $this->originalAttributes[$key] ?? null;
+                    if ($value !== $oldValue) {
+                        $changes[$key] = [
+                            'old' => $oldValue,
+                            'new' => $value
+                        ];
+                    }
+                }
+            }
+
+            $this->logAction($action, $changes);
         }
     }
+
     protected function afterInsert(): void {}
     protected function afterUpdate(): void {}
     // BaseModel.php (or your base model class)
@@ -59,10 +79,10 @@ abstract class DbModel extends Model
      * or an UPDATE (for existing ones) based on whether the primary key is set.
      *
      * Lifecycle hooks:
-     * - `beforeSave()` is called before either operation.
-     * - `afterInsert()` is called after a successful insert.
-     * - `afterUpdate()` is called after a successful update.
-     * - `afterSave()` is always called after a successful save.
+     * - beforeSave() is called before either operation.
+     * - afterInsert() is called after a successful insert.
+     * - afterUpdate() is called after a successful update.
+     * - afterSave() is always called after a successful save.
      *
      * @return bool True if the operation succeeded and affected rows, false otherwise.
      */
@@ -98,8 +118,15 @@ abstract class DbModel extends Model
             $statement = static::prepare($sql);
 
             foreach ($params as $key => $value) {
-                $statement->bindValue($key, $value);
+                if (is_bool($value)) {
+                    $statement->bindValue($key, $value, \PDO::PARAM_BOOL);
+                } elseif ($value === '' && !is_bool($value)) {
+                    $statement->bindValue($key, null, \PDO::PARAM_NULL);
+                } else {
+                    $statement->bindValue($key, $value);
+                }
             }
+
             $statement->bindValue(":$primaryKey", $this->{$primaryKey});
 
             $statement->execute();
@@ -126,7 +153,7 @@ abstract class DbModel extends Model
                 $value = $this->{$attribute};
 
                 if ($value instanceof \sigawa\mvccore\db\RawSQL) {
-                    $placeholders[] = (string)$value;
+                    $placeholders[] = (string) $value;
                 } else {
                     $placeholders[] = $placeholder;
                     $params[$placeholder] = $value;
@@ -135,9 +162,14 @@ abstract class DbModel extends Model
 
             $sql = "INSERT INTO $tableName (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
             $statement = static::prepare($sql);
-
             foreach ($params as $key => $value) {
-                $statement->bindValue($key, $value);
+                if (is_bool($value)) {
+                    $statement->bindValue($key, $value, \PDO::PARAM_BOOL);
+                } elseif ($value === '' && !is_bool($value)) {
+                    $statement->bindValue($key, null, \PDO::PARAM_NULL);
+                } else {
+                    $statement->bindValue($key, $value);
+                }
             }
 
             $statement->execute();
@@ -169,13 +201,13 @@ abstract class DbModel extends Model
 
         $tableName = static::tableName();
         $columns = array_keys($records[0]);
-        $columnList = '`' . implode('`, `', $columns) . '`';
+        $columnList = '' . implode(', ', $columns) . '';
 
         // Build placeholders: (?, ?, ...), (?, ?, ...), ...
         $rowPlaceholders = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
         $allPlaceholders = implode(', ', array_fill(0, count($records), $rowPlaceholders));
 
-        $sql = "INSERT INTO `$tableName` ($columnList) VALUES $allPlaceholders";
+        $sql = "INSERT INTO $tableName ($columnList) VALUES $allPlaceholders";
         $statement = self::prepare($sql);
 
         // Flatten values for all records
@@ -237,32 +269,32 @@ abstract class DbModel extends Model
 
         if (in_array('*', $columns)) {
             foreach ($mainCols as $col) {
-                $colParts[] = "`$mainAlias`.`$col` AS `{$mainAlias}_$col`";
+                $colParts[] = "$mainAlias.$col AS {$mainAlias}_$col";
             }
             foreach ($joinCols as $col) {
-                $colParts[] = "`$joinAlias`.`$col` AS `{$joinAlias}_$col`";
+                $colParts[] = "$joinAlias.$col AS {$joinAlias}_$col";
             }
         } else {
             foreach ($columns as $column) {
                 if (strpos($column, '.') !== false) {
                     [$alias, $col] = explode('.', $column);
-                    $colParts[] = "`$alias`.`$col` AS `{$alias}_$col`";
+                    $colParts[] = "$alias.$col AS {$alias}_$col";
                 }
             }
         }
 
         $sql = "SELECT " . implode(", ", $colParts);
-        $sql .= " FROM `$tableName` AS `$mainAlias`";
-        $sql .= " $joinType JOIN `$joinTable` AS `$joinAlias` ON `$mainAlias`.`$localKey` = `$joinAlias`.`$foreignKey`";
+        $sql .= " FROM $tableName AS $mainAlias";
+        $sql .= " $joinType JOIN $joinTable AS $joinAlias ON $mainAlias.$localKey = $joinAlias.$foreignKey";
 
         if ($conditions) {
             $clauses = [];
             foreach ($conditions as $key => $val) {
                 if (strpos($key, '.') !== false) {
                     [$alias, $col] = explode('.', $key);
-                    $clauses[] = "`$alias`.`$col` = :{$alias}_{$col}";
+                    $clauses[] = "$alias.$col = :{$alias}_{$col}";
                 } else {
-                    $clauses[] = "`$mainAlias`.`$key` = :{$mainAlias}_{$key}";
+                    $clauses[] = "$mainAlias.$key = :{$mainAlias}_{$key}";
                 }
             }
             $sql .= " WHERE " . implode(' AND ', $clauses);
@@ -324,20 +356,20 @@ abstract class DbModel extends Model
         if (in_array('*', $columns)) {
             foreach ($tableColumns as $alias => $cols) {
                 foreach ($cols as $col) {
-                    $columnSelections[] = "`$alias`.`$col` AS `{$alias}_$col`";
+                    $columnSelections[] = "$alias.$col AS {$alias}_$col";
                 }
             }
         } else {
             foreach ($columns as $col) {
                 if (strpos($col, '.') !== false) {
                     [$alias, $colName] = explode('.', $col);
-                    $columnSelections[] = "`$alias`.`$colName` AS `{$alias}_$colName`";
+                    $columnSelections[] = "$alias.$colName AS {$alias}_$colName";
                 }
             }
         }
 
         $sql .= implode(", ", $columnSelections);
-        $sql .= " FROM `$baseTable` AS `$baseAlias`";
+        $sql .= " FROM $baseTable AS $baseAlias";
 
         foreach ($joins as $join) {
             $joinType = strtoupper($join['type'] ?? 'INNER');
@@ -346,7 +378,7 @@ abstract class DbModel extends Model
             $onLocal = $join['localKey'];
             $onForeign = $join['foreignKey'];
 
-            $sql .= " $joinType JOIN `$tbl` AS `$alias` ON `$join.['mainAlias']`.`$onLocal` = `$alias`.`$onForeign`";
+            $sql .= " $joinType JOIN $tbl AS $alias ON $join.['mainAlias'].$onLocal = $alias.$onForeign";
         }
 
         if ($conditions) {
@@ -354,7 +386,7 @@ abstract class DbModel extends Model
             foreach ($conditions as $key => $val) {
                 if (strpos($key, '.') !== false) {
                     [$alias, $col] = explode('.', $key);
-                    $clauses[] = "`$alias`.`$col` = :{$alias}_{$col}";
+                    $clauses[] = "$alias.$col = :{$alias}_{$col}";
                 }
             }
             $sql .= " WHERE " . implode(" AND ", $clauses);
@@ -472,12 +504,12 @@ abstract class DbModel extends Model
 
         $setClause = [];
         foreach ($data as $key => $value) {
-            $setClause[] = "`$key` = :$key";
+            // Optionally: Sanitize key here with regex if needed
+            $setClause[] = "$key = :$key";
         }
 
-        $sql = "UPDATE `$tableName` SET " . implode(", ", $setClause) . " WHERE `$primaryKey` = :primaryKey";
+        $sql = "UPDATE $tableName SET " . implode(", ", $setClause) . " WHERE $primaryKey = :primaryKey";
         $statement = self::prepare($sql);
-
         foreach ($data as $key => $value) {
             $statement->bindValue(":$key", $value);
         }
@@ -485,6 +517,7 @@ abstract class DbModel extends Model
 
         return $statement->execute();
     }
+
 
     public static function buildWhere(array $conditions): string
     {
@@ -497,13 +530,13 @@ abstract class DbModel extends Model
             if (is_array($value)) {
                 // Handle IN clause
                 $placeholders = implode(", ", array_map(fn($i) => ":{$key}_$i", array_keys($value)));
-                $clauses[] = "`$key` IN ($placeholders)";
+                $clauses[] = "$key IN ($placeholders)";
             } elseif (strpos($key, ' ') !== false) {
-                // Handle operators like `>=`, `<=`, `!=`, etc.
+                // Handle operators like >=, <=, !=, etc.
                 $clauses[] = "$key :$key";
             } else {
                 // Default equality condition
-                $clauses[] = "`$key` = :$key";
+                $clauses[] = "$key = :$key";
             }
         }
 
@@ -531,16 +564,16 @@ abstract class DbModel extends Model
         $tableName = static::tableName();
         $columnSelections = $columns === ['*']
             ? '*'
-            : implode(", ", array_map(fn($col) => "`$col`", $columns));
+            : implode(", ", array_map(fn($col) => "$col", $columns));
 
-        $sql = "SELECT $columnSelections FROM `$tableName`";
+        $sql = "SELECT $columnSelections FROM $tableName";
 
         $whereParts = [];
 
         // Add key-value filters
         foreach ($filters as $key => $value) {
             $param = ":" . str_replace('.', '_', $key); // for table.column
-            $whereParts[] = "`$key` = $param";
+            $whereParts[] = "$key = $param";
             $bindings[$param] = $value;
         }
 
@@ -562,7 +595,7 @@ abstract class DbModel extends Model
         if (!empty($extra['orderBy'])) {
             $orderClauses = [];
             foreach ($extra['orderBy'] as $col => $dir) {
-                $orderClauses[] = "`$col` $dir";
+                $orderClauses[] = "$col $dir";
             }
             $sql .= " ORDER BY " . implode(", ", $orderClauses);
         }
@@ -627,7 +660,7 @@ abstract class DbModel extends Model
 
             public function join(string $table, string $on, string $type = 'INNER')
             {
-                $this->joins[] = strtoupper($type) . " JOIN `$table` ON $on";
+                $this->joins[] = strtoupper($type) . " JOIN $table ON $on";
                 return $this;
             }
             public function where(string|array $conditions, array $params = [])
@@ -654,7 +687,7 @@ abstract class DbModel extends Model
                     foreach ($conditions as $key => $value) {
                         $paramKey = str_replace('.', '_', $key);
                         $placeholder = ":{$paramKey}_" . count($this->params);
-                        $clauses[] = "`$key` = $placeholder";
+                        $clauses[] = "$key = $placeholder";
                         $this->params[$placeholder] = $value;
                     }
 
@@ -677,7 +710,7 @@ abstract class DbModel extends Model
 
             public function orderBy(string $column, string $direction = 'ASC')
             {
-                $this->orderBy = "`$column` " . (strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC');
+                $this->orderBy = "$column " . (strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC');
                 return $this;
             }
 
@@ -696,7 +729,7 @@ abstract class DbModel extends Model
             public function all(bool $asArray = false): array
             {
                 $sql = "SELECT " . implode(', ', array_map(function ($col) {
-                    return preg_match('/[^\w.]/', $col) ? $col : "`$col`";
+                    return preg_match('/[^\w.]/', $col) ? $col : "$col";
                 }, $this->columns));
 
                 if (!empty($this->joins)) {
@@ -780,7 +813,7 @@ abstract class DbModel extends Model
              */
             public function joinWith(array|string $relations)
             {
-                $relations = (array)$relations;
+                $relations = (array) $relations;
                 foreach ($relations as $relation) {
                     // Get relation definition from model
                     $instance = new $this->modelClass();
@@ -796,7 +829,7 @@ abstract class DbModel extends Model
                     $this->joins[] = [
                         'table' => $relatedTable,
                         'alias' => $alias,
-                        'on' => "`{$this->table}`.`$localKey` = `$alias`.`$foreignKey`"
+                        'on' => "{$this->table}.$localKey = $alias.$foreignKey"
                     ];
                 }
                 return $this;
@@ -808,9 +841,9 @@ abstract class DbModel extends Model
                     $param = ':' . str_replace('.', '_', $key) . count($this->params);
                     if (strpos($key, '.') !== false) {
                         [$alias, $col] = explode('.', $key, 2);
-                        $this->where[] = "`$alias`.`$col` = $param";
+                        $this->where[] = "$alias.$col = $param";
                     } else {
-                        $this->where[] = "`{$this->table}`.`$key` = $param";
+                        $this->where[] = "{$this->table}.$key = $param";
                     }
                     $this->params[$param] = $value;
                 }
@@ -828,9 +861,9 @@ abstract class DbModel extends Model
                     $direction = (is_string($dir) && strtoupper($dir) === 'DESC') || $dir === SORT_DESC ? 'DESC' : 'ASC';
                     if (strpos($key, '.') !== false) {
                         [$alias, $col] = explode('.', $key, 2);
-                        $this->orderBy[] = "`$alias`.`$col` $direction";
+                        $this->orderBy[] = "$alias.$col $direction";
                     } else {
-                        $this->orderBy[] = "`{$this->table}`.`$key` $direction";
+                        $this->orderBy[] = "{$this->table}.$key $direction";
                     }
                 }
                 return $this;
@@ -873,15 +906,15 @@ abstract class DbModel extends Model
                     : implode(', ', array_map(function ($col) {
                         if (strpos($col, '.') !== false) {
                             [$alias, $c] = explode('.', $col, 2);
-                            return "`$alias`.`$c`";
+                            return "$alias.$c";
                         }
-                        return "`{$this->table}`.`$col`";
+                        return "{$this->table}.$col";
                     }, $this->select));
 
-                $sql = "SELECT $select FROM `{$this->table}`";
+                $sql = "SELECT $select FROM {$this->table}";
 
                 foreach ($this->joins as $join) {
-                    $sql .= " LEFT JOIN `{$join['table']}` AS `{$join['alias']}` ON {$join['on']}";
+                    $sql .= " LEFT JOIN {$join['table']} AS {$join['alias']} ON {$join['on']}";
                 }
 
                 if ($this->where) {
@@ -908,7 +941,7 @@ abstract class DbModel extends Model
         $tableName = static::tableName();
         $primaryKey = static::primaryKey();
 
-        $sql = "SELECT * FROM `$tableName` WHERE `$primaryKey` = :id LIMIT 1";
+        $sql = "SELECT * FROM $tableName WHERE $primaryKey = :id LIMIT 1";
         $statement = self::prepare($sql);
         $statement->bindValue(':id', $id);
         $statement->execute();
@@ -922,7 +955,7 @@ abstract class DbModel extends Model
         $columns = array_keys($data);
         $placeholders = array_map(fn($col) => ":$col", $columns);
 
-        $sql = "INSERT INTO `$tableName` (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
+        $sql = "INSERT INTO $tableName (" . implode(", ", $columns) . ") VALUES (" . implode(", ", $placeholders) . ")";
         $statement = self::prepare($sql);
 
         foreach ($data as $key => $value) {
@@ -946,7 +979,7 @@ abstract class DbModel extends Model
     public static function findAllWhere(string $condition, array $params = []): array
     {
         $tableName = static::tableName();
-        $sql = "SELECT * FROM `$tableName` WHERE $condition";
+        $sql = "SELECT * FROM $tableName WHERE $condition";
         $statement = self::prepare($sql);
 
         foreach ($params as $key => $value) {
@@ -997,7 +1030,21 @@ abstract class DbModel extends Model
     {
         return [];
     }
+    public function loadData($data)
+    {
+        // Store original attributes before changes (only if not a new record)
+        if (!$this->isNewRecord) {
+            $this->originalAttributes = $this->attributes();
+        }
+        // Merge default values with incoming data (incoming data takes priority)
+        $data = array_merge($this->defaultValues(), $data);
 
+        foreach ($data as $key => $value) {
+            if (property_exists($this, $key)) {
+                $this->{$key} = $value;
+            }
+        }
+    }
     /**
      * Returns an array of attribute casts.
      * Example: return ['is_active' => 'bool', 'price' => 'float', 'created_at' => 'datetime'];
@@ -1014,7 +1061,7 @@ abstract class DbModel extends Model
         $primaryKey = static::primaryKey();
 
         // Fetch table columns
-        $statement = Application::$app->db->prepare("SHOW COLUMNS FROM `$tableName`");
+        $statement = Application::$app->db->prepare("SHOW COLUMNS FROM $tableName");
         $statement->execute();
         $columns = array_column($statement->fetchAll(\PDO::FETCH_ASSOC), 'Field'); // Extract column names
 
@@ -1031,7 +1078,7 @@ abstract class DbModel extends Model
         }
 
         if ($softDeleteColumn && !empty($this->{$primaryKey})) {
-            $sql = "UPDATE `$tableName` SET `$softDeleteColumn` = :deleteValue WHERE `$primaryKey` = :primaryKey";
+            $sql = "UPDATE $tableName SET $softDeleteColumn = :deleteValue WHERE $primaryKey = :primaryKey";
             $statement = self::prepare($sql);
             $statement->bindValue(":deleteValue", $deleteValue);
             $statement->bindValue(":primaryKey", $this->{$primaryKey});
@@ -1052,11 +1099,11 @@ abstract class DbModel extends Model
         $parameters = [];
 
         foreach ($conditions as $column => $value) {
-            $whereClause[] = "`$column` = :$column";
+            $whereClause[] = "$column = :$column";
             $parameters[":$column"] = $value;
         }
 
-        $sql = "DELETE FROM `$tableName` WHERE " . implode(' AND ', $whereClause);
+        $sql = "DELETE FROM $tableName WHERE " . implode(' AND ', $whereClause);
 
         $statement = self::prepare($sql);
 
@@ -1081,7 +1128,7 @@ abstract class DbModel extends Model
                 $conditions[] = "$key IS NULL";
             } else {
                 $conditions[] = "$key = :$key";
-                $params[":$key"] = $value;
+                $params[$key] = $value; // ✅ FIXED: removed ":" from key
             }
         }
 
@@ -1092,7 +1139,7 @@ abstract class DbModel extends Model
         $statement = self::prepare($sql);
 
         foreach ($params as $param => $value) {
-            $statement->bindValue($param, $value);
+            $statement->bindValue(":$param", $value); // ✅ FIXED: add colon here
         }
 
         $statement->execute();
@@ -1102,6 +1149,7 @@ abstract class DbModel extends Model
         }
         return $result !== false ? $result : null;
     }
+
     /**
      * Finds all records matching the given conditions, with optional ordering.
      *
@@ -1123,7 +1171,7 @@ abstract class DbModel extends Model
 
         if ($orderBy !== null) {
             $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
-            $sql .= " ORDER BY `$orderBy` $direction";
+            $sql .= " ORDER BY $orderBy $direction";
         }
         $statement = self::prepare($sql);
         foreach ($where as $key => $value) {
@@ -1149,7 +1197,7 @@ abstract class DbModel extends Model
     public static function findWithLimitOffset(int $limit, int $offset = 0): array
     {
         $tableName = static::tableName();
-        $sql = "SELECT * FROM `$tableName` LIMIT :limit OFFSET :offset";
+        $sql = "SELECT * FROM $tableName LIMIT :limit OFFSET :offset";
         $statement = self::prepare($sql);
         $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
         $statement->bindValue(':offset', $offset, PDO::PARAM_INT);
@@ -1173,7 +1221,7 @@ abstract class DbModel extends Model
         $placeholders = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
         $allPlaceholders = implode(', ', array_fill(0, count($records), $placeholders));
 
-        $sql = "INSERT INTO `$tableName` (`" . implode('`, `', $columns) . "`) VALUES $allPlaceholders";
+        $sql = "INSERT INTO $tableName (" . implode(', ', $columns) . ") VALUES $allPlaceholders";
         $statement = self::prepare($sql);
 
         $flatValues = [];
@@ -1194,7 +1242,7 @@ abstract class DbModel extends Model
     public static function count(array $where = []): int
     {
         $tableName = static::tableName();
-        $sql = "SELECT COUNT(*) as count FROM `$tableName`";
+        $sql = "SELECT COUNT(*) as count FROM $tableName";
 
         if (!empty($where)) {
             $conditions = implode(' AND ', array_map(fn($col) => "$col = :$col", array_keys($where)));
@@ -1227,13 +1275,12 @@ abstract class DbModel extends Model
      */
     public static function updateWhere(array $conditions, array $data): bool
     {
-        if (empty($conditions) || empty($data)) return false;
-
+        if (empty($conditions) || empty($data))
+            return false;
         $tableName = static::tableName();
-        $setClause = implode(', ', array_map(fn($col) => "`$col` = :set_$col", array_keys($data)));
-        $whereClause = implode(' AND ', array_map(fn($col) => "`$col` = :where_$col", array_keys($conditions)));
-
-        $sql = "UPDATE `$tableName` SET $setClause WHERE $whereClause";
+        $setClause = implode(', ', array_map(fn($col) => "$col = :set_$col", array_keys($data)));
+        $whereClause = implode(' AND ', array_map(fn($col) => "$col = :where_$col", array_keys($conditions)));
+        $sql = "UPDATE $tableName SET $setClause WHERE $whereClause";
         $statement = self::prepare($sql);
 
         foreach ($data as $key => $value) {
@@ -1258,7 +1305,7 @@ abstract class DbModel extends Model
         $primaryKey = static::primaryKey();
         $orderColumn = $orderBy ?? $primaryKey;
 
-        $sql = "SELECT * FROM `$tableName` ORDER BY `$orderColumn` ASC LIMIT 1";
+        $sql = "SELECT * FROM $tableName ORDER BY $orderColumn ASC LIMIT 1";
         $statement = self::prepare($sql);
         $statement->execute();
 
@@ -1277,7 +1324,7 @@ abstract class DbModel extends Model
         $primaryKey = static::primaryKey();
         $orderColumn = $orderBy ?? $primaryKey;
 
-        $sql = "SELECT * FROM `$tableName` ORDER BY `$orderColumn` DESC LIMIT 1";
+        $sql = "SELECT * FROM $tableName ORDER BY $orderColumn DESC LIMIT 1";
         $statement = self::prepare($sql);
         $statement->execute();
 
@@ -1305,13 +1352,13 @@ abstract class DbModel extends Model
         if (!empty($filters)) {
             $clauses = [];
             foreach ($filters as $column => $value) {
-                $clauses[] = "`$column` = :$column";
+                $clauses[] = "$column = :$column";
                 $parameters[":$column"] = $value;
             }
             $whereClause = "WHERE " . implode(' AND ', $clauses);
         }
 
-        $countSql = "SELECT COUNT(*) FROM `$tableName` $whereClause";
+        $countSql = "SELECT COUNT(*) FROM $tableName $whereClause";
         $countStmt = self::prepare($countSql);
         foreach ($parameters as $key => $value) {
             $countStmt->bindValue($key, $value);
@@ -1319,7 +1366,7 @@ abstract class DbModel extends Model
         $countStmt->execute();
         $total = (int) $countStmt->fetchColumn();
 
-        $dataSql = "SELECT * FROM `$tableName` $whereClause ORDER BY `$orderColumn` $direction LIMIT :limit OFFSET :offset";
+        $dataSql = "SELECT * FROM $tableName $whereClause ORDER BY $orderColumn $direction LIMIT :limit OFFSET :offset";
         $dataStmt = self::prepare($dataSql);
         foreach ($parameters as $key => $value) {
             $dataStmt->bindValue($key, $value);
@@ -1347,11 +1394,12 @@ abstract class DbModel extends Model
      */
     public static function search(string $term, array $columns, ?int $limit = null): array
     {
-        if (empty($columns)) return [];
+        if (empty($columns))
+            return [];
 
         $tableName = static::tableName();
-        $likeClauses = implode(' OR ', array_map(fn($col) => "`$col` LIKE :term", $columns));
-        $sql = "SELECT * FROM `$tableName` WHERE $likeClauses";
+        $likeClauses = implode(' OR ', array_map(fn($col) => "$col LIKE :term", $columns));
+        $sql = "SELECT * FROM $tableName WHERE $likeClauses";
 
         if ($limit !== null) {
             $sql .= " LIMIT :limit";

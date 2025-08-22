@@ -49,15 +49,16 @@ class AuthMiddleware extends BaseMiddleware
         $token = $this->isApi
             ? $this->extractTokenFromHeader($request)
             : Application::$app->session->get('session_token');
-
+           $toe= Application::$app->session->get('session_token');
+        //    error_log("Peter Said this is the toe: ".$toe);
         if (!$token || !AuthProvider::validateToken($token)) {
             $this->handleUnauthorized($response); // Block unauthorized users
         }
 
         // Set the authenticated user
-        $user = AuthProvider::user();
+        $user = Application::$app->user;
         if ($user) {
-            AuthProvider::setUser($user, false); // Do not generate a new token
+            AuthProvider::setUser($user, generateNewToken: false); // Do not generate a new token
         } else {
             $this->handleUnauthorized($response); // Block if user not found
         }

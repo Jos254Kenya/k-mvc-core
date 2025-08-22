@@ -108,7 +108,7 @@ php mcconsole make:controller ControllerName
 Example:
 
 ```php
-namespace App\Controllers;
+namespace Hot360\v1\Controllers;
 
 use sigawa\mvccore\Request;
 use sigawa\mvccore\Response;
@@ -135,7 +135,7 @@ php mcconsole make:model ModelName
 Example:
 
 ```php
-namespace App\Models;
+namespace Hot360\v1\Models;
 
 use sigawa\mvccore\db\DbModel;
 

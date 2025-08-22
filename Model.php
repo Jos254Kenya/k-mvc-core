@@ -106,17 +106,7 @@ class Model
         return [];
     }
     public int $id = 0;
-    public function loadData($data)
-    {
-        // Merge default values with incoming data (incoming data takes priority)
-        $data = array_merge($this->defaultValues(), $data);
-
-        foreach ($data as $key => $value) {
-            if (property_exists($this, $key)) {
-                $this->{$key} = $value;
-            }
-        }
-    }
+    
     public static function findByQuery(string $query, array $params = []): array
     {
         $db = Application::$app->db->pdo;
@@ -357,21 +347,34 @@ class Model
                         $this->addErrorByRule($attribute, self::RULE_IMAGE);
                     }
                 }
-                // ✅ Unique Validation with Optional Except ID
+                // ✅ Unique Validation with Composite Fields Support
                 if ($ruleName === self::RULE_UNIQUE) {
                     $className = $rule['class'];
-                    $uniqueAttr = $rule['attribute'] ?? $attribute;
-                    $tableName = $className::tableName();
                     $db = Application::$app->db;
 
-                    $query = "SELECT * FROM $tableName WHERE $uniqueAttr = :$uniqueAttr";
+                    // Check if rule is defined for multiple attributes
+                    $attributesToCheck = is_array($attribute) ? $attribute : [$attribute];
 
-                    if ($exceptId) { // Only exclude ID if provided
+                    $whereClauses = [];
+                    foreach ($attributesToCheck as $attr) {
+                        $whereClauses[] = "$attr = :$attr";
+                    }
+                    $whereSql = implode(" AND ", $whereClauses);
+
+                    // Build query
+                    $query = "SELECT * FROM " . $className::tableName() . " WHERE $whereSql";
+
+                    // Exclude ID if provided
+                    if ($exceptId) {
                         $query .= " AND id != :exceptId";
                     }
 
                     $statement = $db->prepare($query);
-                    $statement->bindValue(":$uniqueAttr", $value);
+
+                    // Bind values for all attributes
+                    foreach ($attributesToCheck as $attr) {
+                        $statement->bindValue(":$attr", $this->{$attr});
+                    }
 
                     if ($exceptId) {
                         $statement->bindValue(":exceptId", $exceptId);
@@ -381,9 +384,12 @@ class Model
                     $record = $statement->fetchObject();
 
                     if ($record) {
-                        $this->addErrorByRule($attribute, self::RULE_UNIQUE);
+                        // If multiple fields, report error on first field (or a generic one)
+                        $errorField = is_array($attribute) ? $attributesToCheck[0] : $attribute;
+                        $this->addErrorByRule($errorField, self::RULE_UNIQUE);
                     }
                 }
+
                 // RULE_HAS_ONE and RULE_HAS_MANY
             }
         }
@@ -444,7 +450,7 @@ class Model
     {
         return [
 
-            self::RULE_UNIQUE => 'Record with this {field} or username already exists',
+            self::RULE_UNIQUE => ' {field} must be unique. It already exists in the database.',
             self::RULE_REQUIRED => '{field} is required.',
             self::RULE_EMAIL => '{field} must be a valid email address.',
             self::RULE_MIN => '{field} must be at least {min} characters.',
@@ -484,15 +490,41 @@ class Model
         return $this->errorMessages()[$rule];
     }
 
-    protected function addErrorByRule(string $attribute, string $rule, $params = [])
+    protected function addErrorByRule(string|array $attribute, string $rule, $params = [])
     {
-        $params['field'] ??= $attribute;
-        $errorMessage = $this->errorMessage($rule);
-        foreach ($params as $key => $value) {
-            $errorMessage = str_replace("{{$key}}", $value, $errorMessage);
+        // Handle composite attributes (arrays)
+        if (is_array($attribute)) {
+            // Convert to labels for nicer error messages
+            $fieldLabels = array_map(fn($attr) => $this->getLabel($attr), $attribute);
+            $params['fields'] = implode(' + ', $fieldLabels); // e.g. "Property + Department"
+
+            // Also set 'field' param for consistency
+            $params['field'] = $params['fields'];
+
+            // Attach error to each attribute in the composite set
+            foreach ($attribute as $attr) {
+                $errorMessage = $this->errorMessage($rule);
+                foreach ($params as $key => $value) {
+                    $errorMessage = str_replace("{{$key}}", $value, $errorMessage);
+                }
+                $this->errors[$attr][] = $errorMessage;
+            }
+        } else {
+            // Single attribute handling
+            $params['field'] ??= $this->getLabel($attribute);
+            $errorMessage = $this->errorMessage($rule);
+            foreach ($params as $key => $value) {
+                $errorMessage = str_replace("{{$key}}", $value, $errorMessage);
+            }
+            $this->errors[$attribute][] = $errorMessage;
         }
-        $this->errors[$attribute][] = $errorMessage;
     }
+    /**
+     * Add a validation error for a specific attribute.
+     *
+     * @param string $attribute
+     * @param string $message
+     */
 
     public function addError(string $attribute, string $message)
     {

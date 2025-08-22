@@ -119,28 +119,10 @@ class AuthProvider
             if ($generateNewToken) {
             $user->session_token = bin2hex(random_bytes(32));
             Application::$app->session->set('session_token', $user->session_token);
-            $user->update(['session_token' => $user->session_token]);
-
+            $user->update(['session_token' => $user->session_token,'online_status' => 1, 'last_auth_at' => date('Y-m-d H:i:s')]);
+            // error_log("SESSION TOKEN set is :".Application::$app->session->get('session_token'));
         }
         Application::$app->user = $user;
     }
 
-    // public static function setUser(UserModel $user, bool $generateNewToken = true)
-    // {
-    //     $session = Application::$app->session;
-
-    //     if ($generateNewToken) {
-    //         $user->session_token = bin2hex(random_bytes(32));
-    //         $user->update(['session_token' => $user->session_token]);
-    //     }
-
-    //     self::$user = $user;
-
-    //     // **Security Improvement: Regenerate session ID on login**
-    //     session_regenerate_id(true);
-
-    //     $session->set('user', $user->id);
-    //     $session->set('session_token', $user->session_token);
-    //     $session->set('auth_model', get_class($user)); // Store model class
-    // }
 }

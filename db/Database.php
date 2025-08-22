@@ -18,8 +18,28 @@ class Database
         $password = $dbConfig['password'] ?? '';
         $this->pdo = new \PDO($dbDsn, $username, $password);
         $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        // Ensure jobs table exists
+        $this->createJobsTable();
     }
 
+    private function createJobsTable()
+    {
+        $sql = "CREATE TABLE IF NOT EXISTS jobs (
+            id VARCHAR(26) PRIMARY KEY,
+            type VARCHAR(50) NOT NULL,
+            class VARCHAR(255) NOT NULL,
+            data JSON NOT NULL,
+            attempts INT NOT NULL DEFAULT 0,
+            batch_id VARCHAR(26) NULL,
+            queue VARCHAR(100) NOT NULL DEFAULT 'default',
+            available_at INT NOT NULL,
+            reserved_at INT NULL,
+            failed_at INT NULL,
+            error TEXT NULL
+        ) ENGINE=INNODB;
+    ";
+        $this->pdo->exec($sql);
+    }
     public function applyMigrations()
     {
         $this->createMigrationsTable();
@@ -73,10 +93,10 @@ class Database
         $this->log("$lastMigration rollback successful.");
     }
     protected function removeMigration(string $migration)
-{
-    $statement = $this->pdo->prepare("DELETE FROM migrations WHERE migration = :migration");
-    $statement->execute(['migration' => $migration]);
-}
+    {
+        $statement = $this->pdo->prepare("DELETE FROM migrations WHERE migration = :migration");
+        $statement->execute(['migration' => $migration]);
+    }
 
     public function refreshMigrations()
     {
@@ -115,37 +135,37 @@ class Database
         $statement->execute();
         return $statement->fetchColumn() ?: null;
     }
- 
+
     public function rollbackAllMigrations()
     {
         $appliedMigrations = $this->getAppliedMigrations();
-    
+
         if (empty($appliedMigrations)) {
             $this->log("No migrations to rollback.");
             return;
         }
-    
+
         $this->beginTransaction();
-    
+
         try {
             foreach (array_reverse($appliedMigrations) as $migration) {
                 require_once Application::$ROOT_DIR . '/migrations/' . $migration;
                 $className = pathinfo($migration, PATHINFO_FILENAME);
                 $instance = new $className();
-    
+
                 $this->log("Rolling back $migration...");
                 $instance->down();
                 $this->removeMigration($migration);
                 $this->log("$migration rollback successful.");
             }
-    
+
             $this->commit();
         } catch (\Exception $e) {
             $this->rollBack();
             $this->log("Rollback failed: " . $e->getMessage());
         }
     }
-            
+
     public function prepare($sql): \PDOStatement
     {
         return $this->pdo->prepare($sql);
@@ -163,6 +183,10 @@ class Database
     public function beginTransaction()
     {
         return $this->pdo->beginTransaction();
+    }
+    public function inTransaction()
+    {
+        return $this->pdo->inTransaction();
     }
 
     public function commit()

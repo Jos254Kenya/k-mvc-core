@@ -213,7 +213,7 @@ abstract class BaseService
         $log = new AuditLog();
         $log->loadData([
             'action'       => $action,
-            'entity_type'  => static::class, // e.g. "App\Models\Basket"
+            'entity_type'  => static::class, // e.g. "Hot360\v1\Models\Basket"
             'entity_id'    => $modelId,
             'user_id'      => Application::$app->user->id ?? null,
             'ip_address'   => $_SERVER['REMOTE_ADDR'] ?? null,

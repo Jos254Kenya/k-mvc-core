@@ -7,11 +7,9 @@ class Cache
     protected static string $cacheDir = __DIR__ . '/cache/';
     protected static bool $useJson = true;
     protected static bool $useCompression = false;
+    protected static string $fileSuffix = '.cache';
 
-    // In-memory cache (only lasts during this PHP request)
     protected static array $memoryCache = [];
-
-    // Map of tags to cache keys
     protected static array $tagMap = [];
 
     public static function configure(array $options): void
@@ -25,7 +23,11 @@ class Cache
         if (isset($options['useCompression'])) {
             self::$useCompression = (bool)$options['useCompression'];
         }
+        if (isset($options['fileSuffix'])) {
+            self::$fileSuffix = $options['fileSuffix'];
+        }
     }
+
     public static function remember(string $key, int $ttl, callable $callback, string $namespace = '', array $tags = [])
     {
         if (self::has($key, $namespace)) {
@@ -37,10 +39,19 @@ class Cache
         return $value;
     }
 
+    protected static function sanitizeKey(string $key): string
+    {
+        // Only allow alphanumeric, dash, underscore, dot; replace others with underscore
+        return preg_replace('/[^a-zA-Z0-9_\-\.]/', '_', $key);
+    }
+
     protected static function getCacheFile(string $key, string $namespace = ''): string
     {
-        $nsPath = $namespace ? md5($namespace) . '_' : '';
-        return self::$cacheDir . $nsPath . md5($key) . '.cache';
+        $ns = $namespace ? md5($namespace) : '';
+        $sanitizedKey = self::sanitizeKey($key);
+        $hash = md5($key);
+        $prefix = $ns ? $ns . '_' : '';
+        return self::$cacheDir . "{$prefix}{$sanitizedKey}_{$hash}" . self::$fileSuffix;
     }
 
     public static function set(string $key, $value, int $ttl = 3600, string $namespace = '', array $tags = []): bool
@@ -65,13 +76,11 @@ class Cache
         $result = file_put_contents($tempFile, $encoded);
         if ($result === false) return false;
 
-        $path = self::getCacheFile($key, $namespace);
-        $success = rename($tempFile, $path);
+        $cacheFile = self::getCacheFile($key, $namespace);
+        $success = rename($tempFile, $cacheFile);
 
-        // Save to in-memory cache
         self::$memoryCache[$namespace][$key] = $value;
 
-        // Save tag mapping
         foreach ($tags as $tag) {
             self::$tagMap[$tag][] = [$key, $namespace];
         }
@@ -112,9 +121,7 @@ class Cache
 
     public static function has(string $key, string $namespace = ''): bool
     {
-        if (isset(self::$memoryCache[$namespace][$key])) {
-            return true;
-        }
+        if (isset(self::$memoryCache[$namespace][$key])) return true;
 
         $file = self::getCacheFile($key, $namespace);
         if (!file_exists($file)) return false;
@@ -143,11 +150,10 @@ class Cache
     public static function clear(string $namespace = ''): void
     {
         unset(self::$memoryCache[$namespace]);
-
         if (!is_dir(self::$cacheDir)) return;
 
         $prefix = $namespace ? md5($namespace) . '_' : '';
-        foreach (glob(self::$cacheDir . $prefix . '*.cache') as $file) {
+        foreach (glob(self::$cacheDir . $prefix . '*' . self::$fileSuffix) as $file) {
             unlink($file);
         }
     }
@@ -167,7 +173,7 @@ class Cache
     {
         if (!is_dir(self::$cacheDir)) return;
 
-        foreach (glob(self::$cacheDir . '*.cache') as $file) {
+        foreach (glob(self::$cacheDir . '*' . self::$fileSuffix) as $file) {
             $contents = file_get_contents($file);
             if (self::$useCompression) {
                 $contents = gzuncompress($contents);

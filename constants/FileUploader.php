@@ -1,5 +1,5 @@
 <?php  
-namespace Mountkenymilk\Fems\constants;
+namespace sigawa\mvccore\constants;
 
 class FileUploader
 {

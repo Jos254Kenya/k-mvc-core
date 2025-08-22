@@ -68,14 +68,12 @@ class Application
         }
     }
 
-
-
-
     public function guestLogin(UserModel $user)
     {
         $this->session->set('guest', $user->id);
         $this->session->set('auth_model', get_class($user)); // Store model class in session
         $this->user = $user;
+        // AuthProvider::setUser($user);
         return true;
     }
     public function login(UserModel $user)
@@ -109,13 +107,21 @@ class Application
     {
         $this->triggerEvent(self::EVENT_BEFORE_REQUEST);
         try {
-            echo $this->router->resolve();
+            $result = $this->router->resolve();
+
+            if (is_array($result)) {
+                header('Content-Type: application/json');
+                echo json_encode($result);
+            } else {
+                echo $result;
+            }
         } catch (\Exception $e) {
             $this->handleException($e);
         } finally {
             $this->triggerEvent(self::EVENT_AFTER_REQUEST);
         }
     }
+
 
     private function handleException(\Exception $e)
     {

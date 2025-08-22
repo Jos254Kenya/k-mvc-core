@@ -19,7 +19,8 @@ class BaseQueryBuilder
     protected string $groupBy = '';
     protected string $having = '';
     protected string $modelClass;
-
+    protected bool $isDistinct = false;
+    protected ?string $distinctColumn = null;
     public function __construct(string $modelClass)
     {
         $this->modelClass = $modelClass;
@@ -69,7 +70,29 @@ class BaseQueryBuilder
         $this->where[] = "{$column} {$operator} {$param}";
         return $this;
     }
-
+    public function orWhere(string $column, string $operator, $value): self
+    {
+        $param = ':param' . count($this->bindings);
+        $this->bindings[$param] = $value;
+        if (empty($this->where)) {
+            $this->where[] = "{$column} {$operator} {$param}";
+        } else {
+            $last = array_pop($this->where);
+            $this->where[] = "({$last} OR {$column} {$operator} {$param})";
+        }
+        return $this;
+    }
+    public function scalar(): mixed
+    {
+        $sql = $this->toSql();
+        $stmt = Application::$app->db->pdo->prepare($sql);
+        foreach ($this->bindings as $param => $value) {
+            $this->bindValueWithType($stmt, $param, $value);
+        }
+        $stmt->execute();
+        $result = $stmt->fetch(PDO::FETCH_NUM);
+        return $result[0] ?? null;
+    }
     public function orderBy(string $column, string $direction = 'ASC'): self
     {
         $this->orderBy = $this->prefixColumn($column) . ' ' . strtoupper($direction);
@@ -103,15 +126,18 @@ class BaseQueryBuilder
     public function count(string $column = '*'): int
     {
         $col = $column === '*' ? '*' : $this->prefixColumn($column);
-        $sql = "SELECT COUNT({$col}) AS total FROM `{$this->table}`";
+        $sql = "SELECT COUNT({$col}) AS total FROM {$this->table}";
         if ($this->alias) {
-            $sql .= " AS `{$this->alias}`";
+            $sql .= " AS {$this->alias}";
         }
         $sql .= $this->buildJoins();
         $sql .= $this->buildWhere();
 
         $stmt = Application::$app->db->pdo->prepare($sql);
-        $stmt->execute($this->bindings);
+        foreach ($this->bindings as $param => $value) {
+            $this->bindValueWithType($stmt, $param, $value);
+        }
+        $stmt->execute();
         return (int) ($stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0);
     }
 
@@ -119,7 +145,10 @@ class BaseQueryBuilder
     {
         $sql = $this->toSql();
         $stmt = Application::$app->db->pdo->prepare($sql);
-        $stmt->execute($this->bindings);
+        foreach ($this->bindings as $param => $value) {
+            $this->bindValueWithType($stmt, $param, $value);
+        }
+        $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_CLASS, $this->modelClass);
     }
 
@@ -134,12 +163,18 @@ class BaseQueryBuilder
         $this->joins[] = strtoupper($type) . " JOIN {$tableWithAlias} ON {$onClause}";
         return $this;
     }
+    public function distinct(bool $flag = true): static
+    {
+        $this->isDistinct = $flag;
+        return $this;
+    }
     public function toSql(): string
     {
+        
         $sql = 'SELECT ' . ($this->select ? implode(', ', $this->select) : '*');
-        $sql .= " FROM `{$this->table}`";
+        $sql .= " FROM {$this->table}";
         if ($this->alias) {
-            $sql .= " AS `{$this->alias}`";
+            $sql .= " AS {$this->alias}";
         }
         $sql .= $this->buildJoins();
         $sql .= $this->buildWhere();
@@ -189,18 +224,32 @@ class BaseQueryBuilder
         $this->whereConditions[] = ')';
         return $this;
     }
+    protected function bindValueWithType($stmt, string $param, $value): void
+    {
+        if (is_bool($value)) {
+            $stmt->bindValue($param, $value, PDO::PARAM_BOOL);
+        } elseif (is_int($value)) {
+            $stmt->bindValue($param, $value, PDO::PARAM_INT);
+        } elseif (is_null($value)) {
+            $stmt->bindValue($param, $value, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue($param, $value, PDO::PARAM_STR);
+        }
+    }
+
     public function andWhere(array $condition): self
     {
         [$column, $operator, $value] = $condition;
-        $param = ':param' . count($this->bindings);
         if (strtoupper($operator) === 'IS' && strtoupper($value) === 'NULL') {
             $this->where[] = "{$column} IS NULL";
         } else {
+            $param = ':param' . count($this->bindings);
             $this->bindings[$param] = $value;
             $this->where[] = "{$column} {$operator} {$param}";
         }
         return $this;
     }
+
     public function orWhereGroup(array $conditions): static
     {
         $group = [];
@@ -223,7 +272,7 @@ class BaseQueryBuilder
     public function whereGroup(callable $callback): self
     {
         $this->startGroup();          // Push "("
-        $callback($this);            // Let the user add `orWhere()` or `where()`s
+        $callback($this);            // Let the user add orWhere() or where()s
         $this->endGroup();           // Push ")"
         return $this;
     }
@@ -233,6 +282,6 @@ class BaseQueryBuilder
         if (strpos($column, '.') !== false || strpos($column, '(') !== false) {
             return $column;
         }
-        return $this->alias ? "`{$this->alias}`.`$column`" : "`{$this->table}`.`$column`";
+        return $this->alias ? "{$this->alias}.$column" : "{$this->table}.$column";
     }
 }
